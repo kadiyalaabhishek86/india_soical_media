@@ -12,8 +12,11 @@ router = APIRouter(prefix="/wallet", tags=["wallet"])
 
 PACKS = {
     "pack_40": {"coins": 40, "price_inr": 9.00, "label": "40 Coins"},
-    "pack_100": {"coins": 100, "price_inr": 19.00, "label": "100 Coins (Most Popular)"},
-    "pack_275": {"coins": 275, "price_inr": 49.00, "label": "275 Coins (Best Value)"},
+    "pack_100": {"coins": 100, "price_inr": 19.00, "label": "100 Coins"},
+    "pack_275": {"coins": 275, "price_inr": 49.00, "label": "275 Coins"},
+    "pack_600": {"coins": 600, "price_inr": 99.00, "label": "600 Coins"},
+    "pack_1250": {"coins": 1250, "price_inr": 199.00, "label": "1,250 Coins"},
+    "pack_3300": {"coins": 3300, "price_inr": 499.00, "label": "3,300 Coins (Best Value)"},
 }
 
 @router.get("/balance", response_model=WalletBalanceResponse)

@@ -1,7 +1,8 @@
+import os
 import uuid
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from app.core.database import get_db
@@ -15,13 +16,13 @@ router = APIRouter(prefix="/reels", tags=["reels"])
 DEFAULT_REELS = [
     {
         "id": "11111111-aaaa-bbbb-cccc-111111111111",
-        "user_name": "Aditi Sharma",
+        "user_name": "Priya Patel",
         "user_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
         "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
         "thumbnail_url": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80",
         "caption": "Friendship trips hit different! 💜",
-        "likes_count": 3400,
-        "comments_count": 286,
+        "likes_count": 3401,
+        "comments_count": 287,
     },
     {
         "id": "22222222-aaaa-bbbb-cccc-222222222222",
@@ -42,6 +43,36 @@ DEFAULT_REELS = [
         "caption": "Chai and long conversations in Bengaluru ☕✨",
         "likes_count": 2950,
         "comments_count": 142,
+    },
+    {
+        "id": "44444444-aaaa-bbbb-cccc-444444444444",
+        "user_name": "Vikram Rao",
+        "user_avatar": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80",
+        "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        "thumbnail_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80",
+        "caption": "Road trip across the Western Ghats 🚗💨",
+        "likes_count": 4120,
+        "comments_count": 310,
+    },
+    {
+        "id": "55555555-aaaa-bbbb-cccc-555555555555",
+        "user_name": "Ananya Reddy",
+        "user_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+        "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+        "thumbnail_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
+        "caption": "Exploring hidden cafes in Hyderabad ☕🥐",
+        "likes_count": 3890,
+        "comments_count": 245,
+    },
+    {
+        "id": "66666666-aaaa-bbbb-cccc-666666666666",
+        "user_name": "Arjun Mehta",
+        "user_avatar": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=400&q=80",
+        "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+        "thumbnail_url": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=800&q=80",
+        "caption": "Next trip, count me in! Sunset vibes 🌅",
+        "likes_count": 2150,
+        "comments_count": 88,
     }
 ]
 
@@ -76,9 +107,10 @@ async def list_reels(
             created_at=r.created_at,
         ))
 
-    # If DB has fewer than default, include defaults
-    if len(items) == 0:
-        for d in DEFAULT_REELS:
+    # Append default sample reels below user-uploaded reels so feed is always rich
+    db_ids = {r.id for r in db_reels}
+    for d in DEFAULT_REELS:
+        if d["id"] not in db_ids:
             items.append(ReelResponse(
                 id=d["id"],
                 user_id=current_user.id,
@@ -94,6 +126,33 @@ async def list_reels(
             ))
 
     return items
+
+@router.post("/upload-media")
+async def upload_reel_media(
+    file: UploadFile = File(...),
+    current_user: Profile = Depends(get_current_user),
+):
+    target_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads", "reels"))
+    os.makedirs(target_dir, exist_ok=True)
+
+    file_id = str(uuid.uuid4())
+    original_name = file.filename or "video.mp4"
+    ext = os.path.splitext(original_name)[1]
+    if not ext:
+        ext = ".mp4" if "video" in (file.content_type or "") else ".jpg"
+
+    saved_filename = f"{file_id}{ext}"
+    file_path = os.path.join(target_dir, saved_filename)
+
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    return {
+        "url": f"/uploads/reels/{saved_filename}",
+        "filename": original_name,
+        "size": len(content),
+    }
 
 @router.post("", response_model=ReelResponse, status_code=status.HTTP_201_CREATED)
 async def create_reel(

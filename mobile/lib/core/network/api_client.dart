@@ -69,6 +69,33 @@ class ApiClient {
     return _processResponse(response);
   }
 
+  Future<dynamic> uploadMultipart(
+    String url, {
+    required String fieldName,
+    required String filename,
+    required List<int> bytes,
+    Map<String, String>? fields,
+  }) async {
+    final uri = _resolveUri(url);
+    final request = http.MultipartRequest('POST', uri);
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        fieldName,
+        bytes,
+        filename: filename,
+      ),
+    );
+    if (fields != null) {
+      request.fields.addAll(fields);
+    }
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+    final response = await http.Response.fromStream(streamedResponse);
+    return _processResponse(response);
+  }
+
   dynamic _processResponse(http.Response response) {
     if (response.body.isEmpty) return null;
     final json = jsonDecode(response.body);

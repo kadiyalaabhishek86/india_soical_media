@@ -125,6 +125,11 @@ admin_dist_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", 
 if os.path.isdir(admin_dist_path):
     app.mount("/admin", StaticFiles(directory=admin_dist_path, html=True), name="admin")
 
+# Mount static uploads directory for reels and media files
+uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+os.makedirs(os.path.join(uploads_dir, "reels"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 
 @app.get("/")
 async def root():

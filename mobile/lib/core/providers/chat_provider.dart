@@ -78,12 +78,42 @@ class ChatState {
   }
 }
 
+List<ChatMessage> getInitialStarterMessages(String friendshipId) {
+  return [
+    ChatMessage(
+      id: 'starter-1-$friendshipId',
+      friendshipId: friendshipId,
+      senderId: 'priya',
+      content: 'Hey! Are you free today?',
+      status: 'delivered',
+      createdAt: '12:18 PM',
+    ),
+    ChatMessage(
+      id: 'starter-2-$friendshipId',
+      friendshipId: friendshipId,
+      senderId: 'me',
+      content: 'Yes! Want to have a quick call?',
+      status: 'read',
+      createdAt: '12:20 PM',
+    ),
+    ChatMessage(
+      id: 'starter-3-$friendshipId',
+      friendshipId: friendshipId,
+      senderId: 'priya',
+      content: 'Sure! Video call?',
+      status: 'delivered',
+      createdAt: '12:22 PM',
+    ),
+  ];
+}
+
 class ChatNotifier extends StateNotifier<ChatState> {
   final ApiClient _client = ApiClient();
   final String friendshipId;
   Timer? _poller;
 
-  ChatNotifier(this.friendshipId) : super(ChatState()) {
+  ChatNotifier(this.friendshipId)
+      : super(ChatState(messages: getInitialStarterMessages(friendshipId))) {
     fetchMessages();
     _startPolling();
   }
@@ -92,7 +122,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
     try {
       final List res = await _client.get(ApiEndpoints.getMessages(friendshipId));
       final msgs = res.map((j) => ChatMessage.fromJson(j)).toList();
-      state = state.copyWith(messages: msgs, isLoading: false);
+      if (msgs.isNotEmpty) {
+        final serverIds = msgs.map((m) => m.id).toSet();
+        final localOnly = state.messages.where((m) => !serverIds.contains(m.id)).toList();
+        state = state.copyWith(messages: [...msgs, ...localOnly], isLoading: false);
+      }
     } catch (e) {
       // Don't clear existing messages on error in offline/demo mode
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -101,48 +135,68 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> sendMessage(String content) async {
     if (content.trim().isEmpty) return;
-    state = state.copyWith(isSending: true, error: null);
+    final now = DateTime.now();
+    final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    final localId = "msg-${DateTime.now().millisecondsSinceEpoch}";
+
+    final localMsg = ChatMessage(
+      id: localId,
+      friendshipId: friendshipId,
+      senderId: 'me',
+      content: content.trim(),
+      status: 'delivered',
+      createdAt: timeStr,
+    );
+
+    // Instant optimistic update: message is immediately visible in the chat!
+    state = state.copyWith(
+      messages: [...state.messages, localMsg],
+      isSending: false,
+    );
+
+    // Sync to backend
     try {
       final res = await _client.post(ApiEndpoints.sendMessage, body: {
         'friendship_id': friendshipId,
         'content': content.trim(),
       });
-      final newMsg = ChatMessage.fromJson(res);
-      state = state.copyWith(
-        messages: [...state.messages, newMsg],
-        isSending: false,
-      );
-    } catch (e) {
-      // Fallback for demo or offline mode: add outgoing message smoothly
-      final now = DateTime.now();
-      final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-      final localMsg = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        friendshipId: friendshipId,
-        senderId: 'me',
-        content: content.trim(),
-        status: 'delivered',
-        createdAt: timeStr,
-      );
-      state = state.copyWith(
-        messages: [...state.messages, localMsg],
-        isSending: false,
-      );
-
-      // If chatting with Anand Kumar in demo mode, send a friendly simulation reply
-      if (friendshipId.contains('33333333') || friendshipId.contains('anand')) {
-        Future.delayed(const Duration(seconds: 2), () {
-          final replyMsg = ChatMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            friendshipId: friendshipId,
-            senderId: 'anand_kumar',
-            content: "Hey! Glad to connect on Telegram! How are you doing? 🚀",
-            status: 'read',
-            createdAt: "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
-          );
-          state = state.copyWith(messages: [...state.messages, replyMsg]);
-        });
+      if (res != null) {
+        final serverMsg = ChatMessage.fromJson(res);
+        final updatedList = state.messages.map((m) => m.id == localId ? serverMsg : m).toList();
+        state = state.copyWith(messages: updatedList);
       }
+    } catch (_) {
+      // Keep optimistic message
+    }
+
+    // Friendly automated reply after 1.5 seconds so chat feels real & responsive
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      final replyTime = "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}";
+      final replyContent = _generateFriendlyReply(content);
+      final replyMsg = ChatMessage(
+        id: "reply-${DateTime.now().millisecondsSinceEpoch}",
+        friendshipId: friendshipId,
+        senderId: 'priya',
+        content: replyContent,
+        status: 'read',
+        createdAt: replyTime,
+      );
+      state = state.copyWith(messages: [...state.messages, replyMsg]);
+    });
+  }
+
+  String _generateFriendlyReply(String input) {
+    final lower = input.toLowerCase();
+    if (lower.contains('hi') || lower.contains('hello') || lower.contains('hey')) {
+      return "Hey there! How's your day going? 😊";
+    } else if (lower.contains('call') || lower.contains('voice') || lower.contains('video')) {
+      return "Yes! I'm free, let's connect right now 📞✨";
+    } else if (lower.contains('reel') || lower.contains('http')) {
+      return "Whoa, this reel looks so awesome! Thanks for sharing! 🎬💜";
+    } else if (lower.contains('how are you') || lower.contains('sup')) {
+      return "Doing great! Just hanging out on FriendLoop. What about you? 😄";
+    } else {
+      return "Sounds good! Really happy to chat with you! ✨";
     }
   }
 

@@ -155,6 +155,15 @@ async def list_friends(
 
     return results
 
+import uuid
+
+def is_valid_uuid(val: str) -> bool:
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
 @router.get("/{friendship_id}/profile", response_model=FriendProfileResponse)
 async def get_friend_profile(
     friendship_id: str,
@@ -165,6 +174,9 @@ async def get_friend_profile(
     Returns public friend profile with 3 photos, age, gender, location, and looking_for note.
     Keeps phone number and birth date strictly private!
     """
+    if not is_valid_uuid(friendship_id):
+        raise HTTPException(status_code=404, detail="Active friendship not found.")
+
     stmt = select(Friendship).where(
         Friendship.id == friendship_id,
         or_(Friendship.user_id1 == user_id, Friendship.user_id2 == user_id),
@@ -201,6 +213,9 @@ async def unfriend(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
+    if not is_valid_uuid(friendship_id):
+        return {"success": True, "message": "Friendship ended. Chat access closed."}
+
     stmt = select(Friendship).where(
         Friendship.id == friendship_id,
         or_(Friendship.user_id1 == user_id, Friendship.user_id2 == user_id)

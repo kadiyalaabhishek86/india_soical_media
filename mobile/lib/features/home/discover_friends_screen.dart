@@ -19,9 +19,6 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
   String _selectedCity = 'All Cities';
   String _selectedLanguage = 'All Languages';
 
-  final TextEditingController _cityController = TextEditingController();
-  final TextEditingController _languageController = TextEditingController();
-
   static const List<Map<String, dynamic>> _allProfiles = [
     {
       'id': 'user-ananya',
@@ -179,27 +176,10 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
     },
   ];
 
-  @override
-  void dispose() {
-    _cityController.dispose();
-    _languageController.dispose();
-    super.dispose();
-  }
-
   List<Map<String, dynamic>> _getFilteredProfiles() {
-    final cityQuery = _cityController.text.trim().toLowerCase();
-    final langQuery = _languageController.text.trim().toLowerCase();
-
     return _allProfiles.where((p) {
       // 1. City check
-      if (cityQuery.isNotEmpty) {
-        final loc = (p['location'] as String).toLowerCase();
-        final city = (p['city'] as String? ?? '').toLowerCase();
-        final state = (p['state'] as String? ?? '').toLowerCase();
-        if (!loc.contains(cityQuery) && !city.contains(cityQuery) && !state.contains(cityQuery)) {
-          return false;
-        }
-      } else if (_selectedCity != 'All Cities') {
+      if (_selectedCity != 'All Cities') {
         final loc = (p['location'] as String).toLowerCase();
         final city = (p['city'] as String? ?? '').toLowerCase();
         final target = _selectedCity.toLowerCase();
@@ -209,12 +189,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
       }
 
       // 2. Language check
-      if (langQuery.isNotEmpty) {
-        final langs = (p['languages'] as String).toLowerCase();
-        if (!langs.contains(langQuery)) {
-          return false;
-        }
-      } else if (_selectedLanguage != 'All Languages') {
+      if (_selectedLanguage != 'All Languages') {
         final langs = (p['languages'] as String).toLowerCase();
         if (!langs.contains(_selectedLanguage.toLowerCase())) {
           return false;
@@ -376,7 +351,6 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                                   if (v != null) {
                                     setState(() {
                                       _selectedCity = v;
-                                      _cityController.clear();
                                       _currentProfileIndex = 0;
                                     });
                                   }
@@ -408,94 +382,11 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                                   if (v != null) {
                                     setState(() {
                                       _selectedLanguage = v;
-                                      _languageController.clear();
                                       _currentProfileIndex = 0;
                                     });
                                   }
                                 },
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Enter City and Enter Language Custom Text Input Fields Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: FriendLoopColors.border),
-                            ),
-                            child: TextField(
-                              controller: _cityController,
-                              style: const TextStyle(fontSize: 13),
-                              decoration: InputDecoration(
-                                hintText: 'Enter city...',
-                                hintStyle: const TextStyle(fontSize: 12, color: FriendLoopColors.textMuted),
-                                prefixIcon: const Icon(Icons.location_on_outlined, size: 16, color: FriendLoopColors.violet),
-                                suffixIcon: _cityController.text.isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.clear, size: 14),
-                                        onPressed: () {
-                                          setState(() {
-                                            _cityController.clear();
-                                            _currentProfileIndex = 0;
-                                          });
-                                        },
-                                      )
-                                    : null,
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                              ),
-                              onChanged: (_) {
-                                setState(() {
-                                  _currentProfileIndex = 0;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Container(
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: FriendLoopColors.border),
-                            ),
-                            child: TextField(
-                              controller: _languageController,
-                              style: const TextStyle(fontSize: 13),
-                              decoration: InputDecoration(
-                                hintText: 'Enter language...',
-                                hintStyle: const TextStyle(fontSize: 12, color: FriendLoopColors.textMuted),
-                                prefixIcon: const Icon(Icons.language_outlined, size: 16, color: FriendLoopColors.violet),
-                                suffixIcon: _languageController.text.isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.clear, size: 14),
-                                        onPressed: () {
-                                          setState(() {
-                                            _languageController.clear();
-                                            _currentProfileIndex = 0;
-                                          });
-                                        },
-                                      )
-                                    : null,
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                              ),
-                              onChanged: (_) {
-                                setState(() {
-                                  _currentProfileIndex = 0;
-                                });
-                              },
                             ),
                           ),
                         ),
@@ -713,8 +604,6 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                                 setState(() {
                                   _selectedCity = 'All Cities';
                                   _selectedLanguage = 'All Languages';
-                                  _cityController.clear();
-                                  _languageController.clear();
                                   _currentProfileIndex = 0;
                                 });
                               },
@@ -730,29 +619,32 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                     ],
                     const SizedBox(height: 14),
 
-                    // Coin Use Notice Banner
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: FriendLoopColors.lavender.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: FriendLoopColors.lavender),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('🪙', style: TextStyle(fontSize: 16)),
-                          SizedBox(width: 8),
-                          Text(
-                            'Calls and chat use coins',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: FriendLoopColors.plum,
+                    // Coin Use Notice Banner (navigates to Coin Wallet)
+                    GestureDetector(
+                      onTap: () => context.push('/wallet'),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: FriendLoopColors.lavender.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: FriendLoopColors.lavender),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('🪙', style: TextStyle(fontSize: 16)),
+                            SizedBox(width: 8),
+                            Text(
+                              'Calls and chat use coins',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: FriendLoopColors.plum,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

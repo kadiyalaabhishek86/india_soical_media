@@ -41,6 +41,29 @@ async def test_reels_and_rooms_and_wallet(client: AsyncClient, db_session):
     )
     assert comm_res.status_code == 201
 
+    # 3b. Upload reel video media from gallery
+    upload_res = await client.post(
+        "/api/v1/reels/upload-media",
+        headers={"Authorization": "Bearer demo-token-aarav"},
+        files={"file": ("my_gallery_reel.mp4", b"\x00\x00\x00\x18ftypmp42", "video/mp4")}
+    )
+    assert upload_res.status_code == 200
+    uploaded_url = upload_res.json()["url"]
+    assert "/uploads/reels/" in uploaded_url
+
+    # 3c. Create reel from uploaded gallery video
+    create_reel_res = await client.post(
+        "/api/v1/reels",
+        headers={"Authorization": "Bearer demo-token-aarav"},
+        json={
+            "video_url": uploaded_url,
+            "thumbnail_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80",
+            "caption": "Sunset with friends! 🌅"
+        }
+    )
+    assert create_reel_res.status_code == 201
+    assert create_reel_res.json()["video_url"] == uploaded_url
+
     # 4. List rooms
     rooms_res = await client.get("/api/v1/rooms")
     assert rooms_res.status_code == 200

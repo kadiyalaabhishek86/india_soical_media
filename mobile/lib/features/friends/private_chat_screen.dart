@@ -69,7 +69,7 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
     try {
       await ref.read(chatProviderFamily(widget.friendshipId).notifier).sendMessage(text);
-      _scrollToBottom();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (_) {}
   }
 
@@ -690,35 +690,10 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     final currentUserId = ref.watch(authProvider).currentUserProfile?.id ?? 'me';
     final friend = widget.friendInfo;
 
-    // Display starter mockup conversation if empty, plus any user sent messages
+    // Current messages from state with persistent starter conversation fallback
     final effectiveMessages = chatState.messages.isNotEmpty
         ? chatState.messages
-        : [
-            ChatMessage(
-              id: 'starter-1',
-              friendshipId: widget.friendshipId,
-              senderId: friend?.friendId ?? 'priya',
-              content: 'Hey! Are you free today?',
-              status: 'delivered',
-              createdAt: '12:18 PM',
-            ),
-            ChatMessage(
-              id: 'starter-2',
-              friendshipId: widget.friendshipId,
-              senderId: currentUserId,
-              content: 'Yes! Want to have a quick call?',
-              status: 'read',
-              createdAt: '12:20 PM',
-            ),
-            ChatMessage(
-              id: 'starter-3',
-              friendshipId: widget.friendshipId,
-              senderId: friend?.friendId ?? 'priya',
-              content: 'Sure! Video call?',
-              status: 'delivered',
-              createdAt: '12:22 PM',
-            ),
-          ];
+        : getInitialStarterMessages(widget.friendshipId);
 
     return Scaffold(
       backgroundColor: FriendLoopColors.canvas, // Soft FriendLoop lilac canvas #F4EBFC
@@ -742,28 +717,31 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                   ),
                 ),
 
-                // Coin notice banner right above input bar (matching Screen 2)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: FriendLoopColors.lavender.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: FriendLoopColors.lavender),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('🪙 ', style: TextStyle(fontSize: 13)),
-                      Text(
-                        'Calls use coins from your balance.',
-                        style: TextStyle(
-                          color: FriendLoopColors.plum,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                // Coin notice banner right above input bar (matching Screen 2, taps to wallet)
+                GestureDetector(
+                  onTap: () => context.push('/wallet'),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: FriendLoopColors.lavender.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: FriendLoopColors.lavender),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('🪙 ', style: TextStyle(fontSize: 13)),
+                        Text(
+                          'Calls use coins from your balance.',
+                          style: TextStyle(
+                            color: FriendLoopColors.plum,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
 
