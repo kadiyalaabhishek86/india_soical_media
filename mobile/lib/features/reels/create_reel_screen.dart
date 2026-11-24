@@ -539,7 +539,7 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
           alignment: Alignment.center,
           children: [
             // Video Player
-            if (_videoController != null && _videoController!.value.isInitialized)
+            if (_isPlayerInitialized && _videoController != null && _videoController!.value.isInitialized)
               GestureDetector(
                 onTap: _togglePlayPause,
                 child: Center(

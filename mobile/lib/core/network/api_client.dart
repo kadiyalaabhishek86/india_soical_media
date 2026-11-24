@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../constants/api_endpoints.dart';
@@ -29,44 +30,77 @@ class ApiClient {
       return Uri.parse(url);
     }
     final base = ApiEndpoints.baseUrl;
-    final cleanPath = url.startsWith('/') ? url : '/$url';
+    String cleanPath = url.startsWith('/') ? url : '/$url';
+    if (cleanPath.startsWith('/api/v1/')) {
+      cleanPath = cleanPath.substring('/api/v1'.length);
+    }
     return Uri.parse('$base$cleanPath');
   }
 
+  static const Duration timeoutDuration = Duration(seconds: 12);
+
   Future<dynamic> get(String url) async {
-    final response = await http
-        .get(_resolveUri(url), headers: _headers())
-        .timeout(const Duration(seconds: 10));
-    return _processResponse(response);
+    try {
+      final response = await http
+          .get(_resolveUri(url), headers: _headers())
+          .timeout(timeoutDuration);
+      return _processResponse(response);
+    } on TimeoutException {
+      throw Exception('Server took too long to respond. The cloud service may be waking up, please try again.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Connection error: $e');
+    }
   }
 
   Future<dynamic> post(String url, {Map<String, dynamic>? body}) async {
-    final response = await http
-        .post(
-          _resolveUri(url),
-          headers: _headers(),
-          body: body != null ? jsonEncode(body) : null,
-        )
-        .timeout(const Duration(seconds: 10));
-    return _processResponse(response);
+    try {
+      final response = await http
+          .post(
+            _resolveUri(url),
+            headers: _headers(),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
+      return _processResponse(response);
+    } on TimeoutException {
+      throw Exception('Server took too long to respond. The cloud service may be waking up, please try again.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Connection error: $e');
+    }
   }
 
   Future<dynamic> put(String url, {Map<String, dynamic>? body}) async {
-    final response = await http
-        .put(
-          _resolveUri(url),
-          headers: _headers(),
-          body: body != null ? jsonEncode(body) : null,
-        )
-        .timeout(const Duration(seconds: 10));
-    return _processResponse(response);
+    try {
+      final response = await http
+          .put(
+            _resolveUri(url),
+            headers: _headers(),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
+      return _processResponse(response);
+    } on TimeoutException {
+      throw Exception('Server took too long to respond. The cloud service may be waking up, please try again.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Connection error: $e');
+    }
   }
 
   Future<dynamic> delete(String url) async {
-    final response = await http
-        .delete(_resolveUri(url), headers: _headers())
-        .timeout(const Duration(seconds: 10));
-    return _processResponse(response);
+    try {
+      final response = await http
+          .delete(_resolveUri(url), headers: _headers())
+          .timeout(timeoutDuration);
+      return _processResponse(response);
+    } on TimeoutException {
+      throw Exception('Server took too long to respond. The cloud service may be waking up, please try again.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Connection error: $e');
+    }
   }
 
   Future<dynamic> uploadMultipart(
@@ -76,24 +110,31 @@ class ApiClient {
     required List<int> bytes,
     Map<String, String>? fields,
   }) async {
-    final uri = _resolveUri(url);
-    final request = http.MultipartRequest('POST', uri);
-    if (token != null) {
-      request.headers['Authorization'] = 'Bearer $token';
+    try {
+      final uri = _resolveUri(url);
+      final request = http.MultipartRequest('POST', uri);
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          fieldName,
+          bytes,
+          filename: filename,
+        ),
+      );
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+      final streamedResponse = await request.send().timeout(timeoutDuration);
+      final response = await http.Response.fromStream(streamedResponse);
+      return _processResponse(response);
+    } on TimeoutException {
+      throw Exception('Media upload timed out. Please check your internet connection and try again.');
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Upload failed: $e');
     }
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        fieldName,
-        bytes,
-        filename: filename,
-      ),
-    );
-    if (fields != null) {
-      request.fields.addAll(fields);
-    }
-    final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
-    final response = await http.Response.fromStream(streamedResponse);
-    return _processResponse(response);
   }
 
   dynamic _processResponse(http.Response response) {
