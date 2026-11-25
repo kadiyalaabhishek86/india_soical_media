@@ -86,7 +86,7 @@ void main() {
     expect(find.text('Rohan Verma'), findsOneWidget);
     expect(find.text('Sneha Iyer'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('One-to-One Private Chat renders FriendLoop bubbles and coin banner', (WidgetTester tester) async {
@@ -112,7 +112,7 @@ void main() {
     expect(find.byIcon(Icons.phone_outlined), findsOneWidget);
     expect(find.byIcon(Icons.videocam_outlined), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('Recent Calls Screen renders tabs and call log entries', (WidgetTester tester) async {
@@ -135,7 +135,7 @@ void main() {
     expect(find.text('Priya Sharma'), findsOneWidget);
     expect(find.text('Sneha Iyer'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('User Profile Screen renders FriendLoop card, Bio, Looking for, Add Friend and actions', (WidgetTester tester) async {
@@ -161,7 +161,7 @@ void main() {
     expect(find.text('Video'), findsOneWidget);
     expect(find.text('Chat'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('Discover Friends Screen renders Filters button and opens filter sheet', (WidgetTester tester) async {
@@ -187,7 +187,7 @@ void main() {
     expect(find.text('All Cities'), findsOneWidget);
     expect(find.text('All Languages'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('Random Connect Screen renders modes and toggles to Searching view', (WidgetTester tester) async {
@@ -227,7 +227,7 @@ void main() {
 
     expect(find.text('Random Connect'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('Friends List Screen renders Friends title, Priya, Rahul, Neha, Vikram and actions', (WidgetTester tester) async {
@@ -250,7 +250,7 @@ void main() {
     expect(find.byIcon(Icons.videocam_outlined), findsWidgets);
     expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsWidgets);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('Coin Wallet Screen renders balance, packs and expands on Show more / Show less', (WidgetTester tester) async {
@@ -286,7 +286,7 @@ void main() {
 
     expect(find.text('Show more'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 
   testWidgets('Create Reel Screen renders gallery upload option, sample presets, and caption field', (WidgetTester tester) async {
@@ -312,6 +312,6 @@ void main() {
     expect(find.text('Caption'), findsOneWidget);
     expect(find.text('#friends'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(seconds: 35));
   });
 }

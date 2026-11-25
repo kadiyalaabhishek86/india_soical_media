@@ -37,7 +37,7 @@ class ApiClient {
     return Uri.parse('$base$cleanPath');
   }
 
-  static const Duration timeoutDuration = Duration(seconds: 12);
+  static const Duration timeoutDuration = Duration(seconds: 30);
 
   Future<dynamic> get(String url) async {
     try {
@@ -139,11 +139,19 @@ class ApiClient {
 
   dynamic _processResponse(http.Response response) {
     if (response.body.isEmpty) return null;
-    final json = jsonDecode(response.body);
+    dynamic json;
+    try {
+      json = jsonDecode(response.body);
+    } catch (_) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return response.body;
+      }
+      throw Exception('Server error (${response.statusCode}): ${response.reasonPhrase ?? "Service unavailable"}');
+    }
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return json;
     } else {
-      final detail = json is Map ? (json['detail'] ?? json['message'] ?? 'Request failed') : 'Request failed';
+      final detail = json is Map ? (json['detail'] ?? json['message'] ?? 'Request failed (${response.statusCode})') : 'Request failed (${response.statusCode})';
       throw Exception(detail.toString());
     }
   }
