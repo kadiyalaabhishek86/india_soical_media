@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
@@ -44,11 +45,16 @@ async def get_plus_status(
         plan_name="FriendLoop Plus Monthly",
     )
 
+class PlusSubscribeRequest(BaseModel):
+    payment_method: Optional[str] = "google_play" # "google_play" or "alternative_razorpay"
+
 @router.post("/plus/subscribe", response_model=PlusSubscriptionResponse)
 async def subscribe_plus(
+    req: Optional[PlusSubscribeRequest] = None,
     current_user: Profile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    method = req.payment_method if req and req.payment_method else "google_play"
     now = datetime.utcnow()
     valid_until = now + timedelta(days=30)
     current_user.is_plus_subscriber = True
@@ -56,7 +62,7 @@ async def subscribe_plus(
 
     sub = Subscription(
         user_id=current_user.id,
-        plan_id="plus_monthly",
+        plan_id=f"plus_monthly_{method}",
         price_inr=350.00,
         status="active",
         starts_at=now,

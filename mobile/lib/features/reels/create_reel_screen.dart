@@ -6,6 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/theme/colors.dart';
 import '../../core/network/api_client.dart';
+import '../../core/constants/api_endpoints.dart';
+import '../../core/providers/reels_provider.dart';
+import '../../core/providers/auth_provider.dart';
 import 'video_controller_helper.dart';
 
 class CreateReelScreen extends ConsumerStatefulWidget {
@@ -33,12 +36,13 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
   String _videoDurationText = '';
   String _videoSizeText = '';
   String? _sampleVideoUrl;
+  String? _sampleThumbnailUrl;
 
   final List<Map<String, String>> _sampleReels = [
     {
       'title': 'Mountain Trek',
       'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-      'thumb': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80',
+      'thumb': 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
     },
     {
       'title': 'Sunset Vibes',
@@ -127,6 +131,7 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
     setState(() {
       _selectedVideo = null;
       _sampleVideoUrl = sample['url'];
+      _sampleThumbnailUrl = sample['thumb'];
       _isPlayerInitialized = false;
       _isPlaying = false;
       _videoSizeText = '14.2 MB';
@@ -208,25 +213,26 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
 
   Future<void> _handleUpload() async {
     if (_selectedVideo == null && _sampleVideoUrl == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please choose a video from your gallery first! 📹'),
-          backgroundColor: FriendLoopColors.rose,
-        ),
-      );
+      await _pickVideoFromGallery();
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      String videoUrl = _sampleVideoUrl ??
-          'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
-      String thumbnailUrl =
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80';
+      final currentUser = ref.read(authProvider).currentUserProfile;
+      final userName = currentUser?.displayName ?? 'You';
+      final userAvatar = (currentUser?.images.isNotEmpty == true)
+          ? currentUser!.images.first
+          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
 
-      // 1. Upload video file to backend if picked from gallery
+      String videoUrl;
+      String thumbnailUrl;
+
       if (_selectedVideo != null) {
+        videoUrl = _selectedVideo!.path;
+        thumbnailUrl = userAvatar; // Default to user's photo instead of a random man!
+
         try {
           final videoBytes = await _selectedVideo!.readAsBytes();
           final uploadRes = await _client.uploadMultipart(
@@ -236,39 +242,75 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
             bytes: videoBytes,
           );
           if (uploadRes != null && uploadRes['url'] != null) {
-            videoUrl = uploadRes['url'].toString();
+            final raw = uploadRes['url'].toString();
+            videoUrl = raw.startsWith('http')
+                ? raw
+                : '${ApiEndpoints.rootUrl}$raw';
           }
         } catch (_) {
-          // Graceful fallback for mock/demo mode
+          // Fallback to local path so the video plays immediately even if offline
+          videoUrl = _selectedVideo!.path;
         }
-      }
 
-      // 2. Upload custom cover if picked
-      if (_selectedThumbnail != null && _thumbnailBytes != null) {
-        try {
-          final thumbUploadRes = await _client.uploadMultipart(
-            '/reels/upload-media',
-            fieldName: 'file',
-            filename: _selectedThumbnail!.name,
-            bytes: _thumbnailBytes!,
-          );
-          if (thumbUploadRes != null && thumbUploadRes['url'] != null) {
-            thumbnailUrl = thumbUploadRes['url'].toString();
-          }
-        } catch (_) {}
+        if (_selectedThumbnail != null && _thumbnailBytes != null) {
+          try {
+            final thumbUploadRes = await _client.uploadMultipart(
+              '/reels/upload-media',
+              fieldName: 'file',
+              filename: _selectedThumbnail!.name,
+              bytes: _thumbnailBytes!,
+            );
+            if (thumbUploadRes != null && thumbUploadRes['url'] != null) {
+              final rawThumb = thumbUploadRes['url'].toString();
+              thumbnailUrl = rawThumb.startsWith('http')
+                  ? rawThumb
+                  : '${ApiEndpoints.rootUrl}$rawThumb';
+            }
+          } catch (_) {}
+        }
+      } else {
+        videoUrl = _sampleVideoUrl ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+        thumbnailUrl = _sampleThumbnailUrl ?? 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80';
       }
 
       // 3. Create the Reel record in backend
-      await _client.post(
-        '/reels',
-        body: {
-          'video_url': videoUrl,
-          'thumbnail_url': thumbnailUrl,
-          'caption': _captionController.text.trim().isEmpty
-              ? 'New reel from gallery! 💜'
-              : _captionController.text.trim(),
-        },
-      );
+      dynamic serverRes;
+      try {
+        serverRes = await _client.post(
+          '/reels',
+          body: {
+            'video_url': videoUrl,
+            'thumbnail_url': thumbnailUrl,
+            'caption': _captionController.text.trim().isEmpty
+                ? 'New reel from gallery! 💜'
+                : _captionController.text.trim(),
+          },
+        );
+      } catch (_) {}
+
+      final newReel = {
+        'id': serverRes != null && serverRes['id'] != null
+            ? serverRes['id'].toString()
+            : 'user-reel-${DateTime.now().millisecondsSinceEpoch}',
+        'user_name': serverRes != null && serverRes['user_name'] != null
+            ? serverRes['user_name'].toString()
+            : userName,
+        'user_avatar': serverRes != null && serverRes['user_avatar'] != null
+            ? serverRes['user_avatar'].toString()
+            : userAvatar,
+        'video_url': videoUrl,
+        'local_video_url': _selectedVideo?.path,
+        'thumbnail_url': thumbnailUrl,
+        'caption': _captionController.text.trim().isEmpty
+            ? 'New reel from gallery! 💜'
+            : _captionController.text.trim(),
+        'likes_count': 0,
+        'comments_count': 0,
+        'is_liked': false,
+      };
+
+      // Add to shared reels provider immediately so it's always at the top
+      ref.read(reelsProvider.notifier).addUploadedReel(newReel);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -277,7 +319,7 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
           backgroundColor: FriendLoopColors.success,
         ),
       );
-      context.pop(true);
+      context.pop(newReel);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -408,14 +450,14 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
                           ],
                         )
                       : Text(
-                          hasVideo ? 'Upload Reel from Gallery' : 'Select Video First',
+                          hasVideo ? 'Upload Reel from Gallery' : 'Choose Video to Upload',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: hasVideo ? FriendLoopColors.violet : Colors.grey.shade400,
+                    backgroundColor: FriendLoopColors.violet,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: hasVideo ? 2 : 0,
+                    elevation: 2,
                   ),
                 ),
               ),

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/friends_provider.dart';
 import '../../core/providers/chat_provider.dart';
+import '../../core/providers/chats_inbox_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/theme/colors.dart';
@@ -39,6 +40,14 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
         setState(() => _hasText = hasNow);
       }
     });
+
+    // Mark messages as read as soon as user opens this chat
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(chatsInboxProvider.notifier).markAsRead(
+        widget.friendshipId,
+        widget.friendInfo?.displayName,
+      );
+    });
   }
 
   @override
@@ -62,6 +71,20 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
     final text = (customText ?? _messageController.text).trim();
     if (text.isEmpty) return;
 
+    final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
+    if (userCoins < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Insufficient coins to send message (2 coins required, you have $userCoins). Please recharge.'),
+          backgroundColor: FriendLoopColors.plum,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      context.push('/wallet');
+      return;
+    }
+    ref.read(authProvider.notifier).updateCoins(userCoins - 2);
+
     if (customText == null) {
       _messageController.clear();
       setState(() => _hasText = false);
@@ -69,6 +92,11 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
 
     try {
       await ref.read(chatProviderFamily(widget.friendshipId).notifier).sendMessage(text);
+      ref.read(chatsInboxProvider.notifier).updateLastMessage(
+        widget.friendshipId,
+        text,
+        isOutgoing: true,
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (_) {}
   }
@@ -270,10 +298,35 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                       ),
                       onPressed: () {
                         Navigator.pop(modalContext);
+                        final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
                         if (selectedMode == 'video') {
-                          _showIncomingVideoCallOverlay(context, friend);
+                          if (userCoins < 40) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Insufficient coins for Video Call (40 coins required, you have $userCoins). Please recharge.'),
+                                backgroundColor: FriendLoopColors.plum,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                            context.push('/wallet');
+                            return;
+                          }
+                          ref.read(authProvider.notifier).updateCoins(userCoins - 40);
+                          context.push('/call/video', extra: friend);
                         } else {
-                          context.push('/call');
+                          if (userCoins < 10) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Insufficient coins for Voice Call (10 coins required, you have $userCoins). Please recharge.'),
+                                backgroundColor: FriendLoopColors.plum,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                            context.push('/wallet');
+                            return;
+                          }
+                          ref.read(authProvider.notifier).updateCoins(userCoins - 10);
+                          context.push('/call', extra: friend);
                         }
                       },
                       child: const Text(
@@ -1342,6 +1395,10 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
               setState(() => _isMenuOpen = false);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Auto-delete messages enabled: 24h')));
             }, hasTrailingChevron: true),
+            _buildMenuItem(Icons.flag_outlined, 'Report user', () {
+              setState(() => _isMenuOpen = false);
+              context.push('/report-block');
+            }),
             _buildMenuItem(Icons.pan_tool_outlined, 'Block user', () async {
               setState(() => _isMenuOpen = false);
               if (friend != null) {

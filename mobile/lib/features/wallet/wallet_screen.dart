@@ -88,79 +88,228 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   }
 
   void _showPurchaseConfirm(Map<String, dynamic> pack) {
+    String selectedMethod = 'google_play'; // Default to Google Play Billing
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Confirm Purchase',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: FriendLoopColors.plum),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('🪙', style: TextStyle(fontSize: 24)),
-                const SizedBox(width: 8),
-                Text(
-                  '${pack['formattedCoins']} Coins',
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: FriendLoopColors.plum),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Amount to pay: ₹${(pack['price_inr'] as num).toInt()}',
-              style: const TextStyle(fontSize: 15, color: FriendLoopColors.textSecondary),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    final res = await _client.post(
-                      '/wallet/buy',
-                      body: {
-                        'pack_id': pack['id'],
-                        'coins': pack['coins'],
-                        'price_inr': pack['price_inr'],
-                      },
-                    );
-                    if (res['coins'] != null) {
-                      ref.read(authProvider.notifier).updateCoins(res['coins']);
-                    }
-                    _fetchWallet();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Successfully added ${pack['formattedCoins']} coins! 🪙'),
-                        backgroundColor: FriendLoopColors.success,
-                      ),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed: ${e.toString()}'), backgroundColor: FriendLoopColors.rose),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: FriendLoopColors.violet,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Pay with UPI / Card', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
-            ),
-          ],
+              const Center(
+                child: Text(
+                  'Choose Payment Option',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: FriendLoopColors.plum),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: FriendLoopColors.lavender.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🪙', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${pack['formattedCoins']} Coins — ₹${(pack['price_inr'] as num).toInt()}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: FriendLoopColors.plum),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'In accordance with Google Play’s User Choice Billing program for India, you may choose Google Play Billing or an alternative payment method:',
+                style: TextStyle(fontSize: 11, color: FriendLoopColors.textMuted, height: 1.35),
+              ),
+              const SizedBox(height: 14),
+
+              // Option 1: Google Play Billing
+              GestureDetector(
+                onTap: () => setSheetState(() => selectedMethod = 'google_play'),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: selectedMethod == 'google_play' ? FriendLoopColors.lavender.withValues(alpha: 0.3) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selectedMethod == 'google_play' ? FriendLoopColors.violet : FriendLoopColors.border,
+                      width: selectedMethod == 'google_play' ? 1.8 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Radio<String>(
+                        value: 'google_play',
+                        groupValue: selectedMethod,
+                        activeColor: FriendLoopColors.violet,
+                        onChanged: (v) => setSheetState(() => selectedMethod = v!),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'Google Play Billing',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: FriendLoopColors.plum),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: FriendLoopColors.violet.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text('Play Store', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: FriendLoopColors.violet)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Pay with Google Play balance, UPI, cards, or netbanking. Buyer protection included.',
+                              style: TextStyle(fontSize: 11, color: FriendLoopColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Option 2: Alternative Billing (Razorpay India)
+              GestureDetector(
+                onTap: () => setSheetState(() => selectedMethod = 'alternative_razorpay'),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: selectedMethod == 'alternative_razorpay' ? FriendLoopColors.lavender.withValues(alpha: 0.3) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selectedMethod == 'alternative_razorpay' ? FriendLoopColors.violet : FriendLoopColors.border,
+                      width: selectedMethod == 'alternative_razorpay' ? 1.8 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Radio<String>(
+                        value: 'alternative_razorpay',
+                        groupValue: selectedMethod,
+                        activeColor: FriendLoopColors.violet,
+                        onChanged: (v) => setSheetState(() => selectedMethod = v!),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'Alternative Billing (Razorpay)',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: FriendLoopColors.plum),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text('UPI & Cards', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Direct checkout via Razorpay (GPay, PhonePe, Paytm, BHIM, Cards, Netbanking).',
+                              style: TextStyle(fontSize: 11, color: FriendLoopColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Purchase Button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    try {
+                      final res = await _client.post(
+                        '/wallet/buy',
+                        body: {
+                          'pack_id': pack['id'],
+                          'coins': pack['coins'],
+                          'price_inr': pack['price_inr'],
+                          'payment_method': selectedMethod,
+                        },
+                      );
+                      if (res['coins'] != null) {
+                        ref.read(authProvider.notifier).updateCoins(res['coins']);
+                      }
+                      _fetchWallet();
+                      if (!mounted) return;
+                      final providerLabel = selectedMethod == 'google_play' ? 'Google Play Billing' : 'Razorpay';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Payment via $providerLabel successful! Added ${pack['formattedCoins']} coins! 🪙'),
+                          backgroundColor: FriendLoopColors.success,
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed: ${e.toString()}'), backgroundColor: FriendLoopColors.rose),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: FriendLoopColors.violet,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    selectedMethod == 'google_play'
+                        ? 'Pay ₹${(pack['price_inr'] as num).toInt()} with Google Play'
+                        : 'Pay ₹${(pack['price_inr'] as num).toInt()} with Razorpay',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
         ),
       ),
     );

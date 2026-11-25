@@ -164,7 +164,7 @@ void main() {
     await tester.pump(const Duration(seconds: 15));
   });
 
-  testWidgets('Discover Friends Screen renders All Cities and All Languages filters', (WidgetTester tester) async {
+  testWidgets('Discover Friends Screen renders Filters button and opens filter sheet', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: MaterialApp(
@@ -177,6 +177,13 @@ void main() {
 
     expect(find.text('Discover Friends'), findsOneWidget);
     expect(find.text('Find and connect with friendly people across India'), findsOneWidget);
+    expect(find.text('Filters'), findsOneWidget);
+
+    // Open filter bottom sheet to verify filter options
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Filter Profiles'), findsOneWidget);
     expect(find.text('All Cities'), findsOneWidget);
     expect(find.text('All Languages'), findsOneWidget);
 

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     GOOGLE_PLAY_PACKAGE_NAME: str = Field(default="com.aara.social")
     GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: Optional[str] = Field(default=None)
 
+    REDIS_URL: Optional[str] = Field(default=None)
+    UPSTASH_REDIS_REST_URL: Optional[str] = Field(default=None)
+    UPSTASH_REDIS_REST_TOKEN: Optional[str] = Field(default=None)
+
     ADMIN_SECRET_KEY: str = Field(default="admin-super-secret-key-change-in-production-12345")
     ADMIN_DEFAULT_USERNAME: str = Field(default="admin")
     ADMIN_DEFAULT_PASSWORD: str = Field(default="Admin@12345")

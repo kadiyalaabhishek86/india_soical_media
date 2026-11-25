@@ -86,7 +86,7 @@ async def send_message(
         )
         friendship = (await db.execute(fs_stmt)).scalar_one_or_none()
         if not friendship or friendship.status != "active":
-            return res_msg
+            raise HTTPException(status_code=403, detail="Friendship is not active or has been blocked.")
 
         recipient_id = friendship.user_id2 if friendship.user_id1 == user_id else friendship.user_id1
 
@@ -98,7 +98,7 @@ async def send_message(
             )
         )
         if (await db.execute(block_stmt)).scalar_one_or_none():
-            return res_msg
+            raise HTTPException(status_code=403, detail="Cannot send message. User has been blocked.")
 
         # 4. Check recipient status
         recipient_stmt = select(Profile).where(Profile.id == recipient_id, Profile.is_deleted == False)
@@ -118,6 +118,8 @@ async def send_message(
         db.add(msg)
         friendship.updated_at = datetime.utcnow()
         await db.commit()
+    except HTTPException:
+        raise
     except Exception:
         pass
 

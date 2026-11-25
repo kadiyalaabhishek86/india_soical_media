@@ -91,6 +91,26 @@ async def get_current_user_id(credentials: Optional[HTTPAuthorizationCredentials
             return token
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid authentication token: {str(e)}")
 
+async def get_optional_current_user_id(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[str]:
+    if not credentials:
+        return None
+    try:
+        return await get_current_user_id(credentials)
+    except Exception:
+        return None
+
+async def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Any = Depends(get_db)
+) -> Optional[Any]:
+    user_id = await get_optional_current_user_id(credentials)
+    if not user_id:
+        return None
+    try:
+        return await get_current_user(user_id=user_id, db=db)
+    except Exception:
+        return None
+
 async def get_current_staff(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict[str, Any]:
     if not credentials:
         raise HTTPException(

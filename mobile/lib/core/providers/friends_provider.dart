@@ -25,6 +25,20 @@ class FriendItem {
   final String? lookingFor;
   final dynamic languages;
   final String? avatarUrl;
+  final String? distance;
+  final String? height;
+  final String? orientation;
+  final String? pets;
+  final String? drinking;
+  final String? smoking;
+  final String? workouts;
+  final String? socialMedia;
+  final String? zodiac;
+  final String? education;
+  final String? familyPlan;
+  final String? communicationStyle;
+  final String? loveStyle;
+  final List<String>? interests;
 
   FriendItem({
     required this.friendshipId,
@@ -49,6 +63,20 @@ class FriendItem {
     this.lookingFor,
     this.languages,
     this.avatarUrl,
+    this.distance,
+    this.height,
+    this.orientation,
+    this.pets,
+    this.drinking,
+    this.smoking,
+    this.workouts,
+    this.socialMedia,
+    this.zodiac,
+    this.education,
+    this.familyPlan,
+    this.communicationStyle,
+    this.loveStyle,
+    this.interests,
   });
 
   factory FriendItem.fromJson(Map<String, dynamic> json) {

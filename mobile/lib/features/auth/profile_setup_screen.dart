@@ -15,6 +15,8 @@ class ProfileSetupScreen extends ConsumerStatefulWidget {
 class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _nameController = TextEditingController(text: 'Ananya Sharma');
   String _selectedCity = 'Bengaluru';
+  DateTime _selectedDob = DateTime(2000, 1, 1);
+  bool _isAdultConfirmed = true;
   final Set<String> _selectedLanguages = {'Hindi', 'English'};
   final Set<String> _selectedLookingFor = {'Friends', 'Call buddies'};
   String? _avatarUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
@@ -67,6 +69,30 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     } catch (_) {}
   }
 
+  Future<void> _pickDob() async {
+    final now = DateTime.now();
+    final maxDate = DateTime(now.year - 18, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDob.isAfter(maxDate) ? maxDate : _selectedDob,
+      firstDate: DateTime(1930),
+      lastDate: maxDate,
+      helpText: 'Select your birth date (Strictly 18+)',
+    );
+    if (picked != null) {
+      setState(() => _selectedDob = picked);
+    }
+  }
+
+  int _calculateAge(DateTime dob) {
+    final now = DateTime.now();
+    var age = now.year - dob.year;
+    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
+
   Future<void> _handleSave() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
@@ -78,16 +104,29 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       return;
     }
 
+    final age = _calculateAge(_selectedDob);
+    if (age < 18) {
+      setState(() => _errorMessage = 'FriendLoop is strictly for adults (18+). Minors are not permitted to register.');
+      return;
+    }
+
+    if (!_isAdultConfirmed) {
+      setState(() => _errorMessage = 'Please confirm that you are at least 18 years old to proceed.');
+      return;
+    }
+
     setState(() {
       _errorMessage = null;
       _isLoading = true;
     });
 
     try {
+      final formattedDob =
+          '${_selectedDob.year.toString().padLeft(4, '0')}-${_selectedDob.month.toString().padLeft(2, '0')}-${_selectedDob.day.toString().padLeft(2, '0')}';
       final lookingForString = _selectedLookingFor.join(', ');
       await ref.read(authProvider.notifier).createProfile(
         displayName: name,
-        dob: '2000-01-01',
+        dob: formattedDob,
         stateName: 'Karnataka',
         city: _selectedCity,
         languages: _selectedLanguages.toList(),
@@ -251,6 +290,43 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 14),
+
+              // Date of Birth Field (Strict 18+ enforcement)
+              GestureDetector(
+                onTap: _pickDob,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: FriendLoopColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cake_outlined, size: 20, color: FriendLoopColors.textSecondary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Date of Birth (Strictly 18+)',
+                              style: TextStyle(fontSize: 11, color: FriendLoopColors.textSecondary),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_selectedDob.day.toString().padLeft(2, '0')}/${_selectedDob.month.toString().padLeft(2, '0')}/${_selectedDob.year} (${_calculateAge(_selectedDob)} years)',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: FriendLoopColors.plum),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.calendar_today_outlined, size: 18, color: FriendLoopColors.violet),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
 
               // Languages Section
@@ -359,7 +435,47 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+
+              // 18+ Declaration & Safety Standards Checkbox
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isAdultConfirmed ? FriendLoopColors.lavender : FriendLoopColors.border,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: _isAdultConfirmed,
+                        activeColor: FriendLoopColors.violet,
+                        onChanged: (val) {
+                          setState(() => _isAdultConfirmed = val ?? false);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'I confirm that I am 18 years of age or older. I understand that FriendLoop strictly restricts minor access and requires all users to be adults (18+).',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: FriendLoopColors.plum.withValues(alpha: 0.85),
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
 
               // Save profile button
               SizedBox(

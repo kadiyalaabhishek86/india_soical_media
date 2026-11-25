@@ -45,6 +45,11 @@ class FriendLoopTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
       cardTheme: CardThemeData(
         color: FriendLoopColors.surfaceCard,
         elevation: 0,

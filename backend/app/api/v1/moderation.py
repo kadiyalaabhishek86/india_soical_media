@@ -96,24 +96,24 @@ async def report_user(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    valid_reasons = ["harassment", "threats", "scam", "underage", "inappropriate_content", "other"]
-    if request.reason not in valid_reasons:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid reason. Must be one of: {', '.join(valid_reasons)}"
-        )
+    import uuid
+    raw_target = request.reported_id or request.target_id or user_id
+    is_valid_uuid = False
+    try:
+        uuid.UUID(str(raw_target))
+        is_valid_uuid = True
+    except (ValueError, AttributeError):
+        is_valid_uuid = False
 
-    # Verify reported user exists
-    p_stmt = select(Profile).where(Profile.id == request.reported_id)
-    if not (await db.execute(p_stmt)).scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Reported user not found.")
+    reported_profile_id = str(raw_target) if is_valid_uuid else user_id
+    detail_note = f"Type: {request.target_type or 'user'} | RawTarget: {raw_target} | Details: {request.details or ''}"
 
     report = Report(
         reporter_id=user_id,
-        reported_id=request.reported_id,
+        reported_id=reported_profile_id,
         call_id=request.call_id,
-        reason=request.reason,
-        details=request.details,
+        reason=request.reason[:30],
+        details=detail_note,
         status="pending"
     )
     db.add(report)
@@ -122,7 +122,7 @@ async def report_user(
 
     return ReportResponse(
         report_id=report.id,
-        message="Thank you for keeping Aara safe. Your report has been submitted confidentially."
+        message="Thank you for keeping FriendLoop safe. Your report has been submitted to 24/7 moderation."
     )
 
 @router.post("/support")

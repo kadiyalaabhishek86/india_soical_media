@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/providers/favorites_provider.dart';
+import '../../core/providers/friends_provider.dart';
 import '../../core/network/api_client.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -31,6 +33,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final List<String> _galleryVideos = [
     'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80',
     'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
+  ];
+
+  String _lookingFor = 'Long-term relationship';
+  String _distance = '84 miles away';
+  String _height = 'Height: 168 cm';
+  String _city = 'Bengaluru';
+  String _orientation = 'Straight';
+
+  String _pets = 'Pets: Dog lover 🐶';
+  String _drinking = 'Drinking: Socially 🍷';
+  String _smoking = 'Smoking: Non-smoker 🚭';
+  String _workouts = 'Workouts: Regular workouts 💪';
+  String _socialMedia = 'Social media: Active on Instagram 📱';
+
+  String _zodiac = 'Zodiac: Scorpio ♏';
+  String _education = 'Education: Masters Graduate 🎓';
+  String _familyPlan = 'Family plan: Wants children 👶';
+  String _commStyle = 'Communication style: Big texter & calls 💬';
+  String _loveStyle = 'Love style: Quality time & words of affirmation 💜';
+
+  List<String> _interests = [
+    'Long walks with photography 📷',
+    'Biryani 🍛',
+    'Harry Potter ⚡',
   ];
 
   @override
@@ -220,6 +246,150 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  void _openEditSectionSheet(String title) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Widget content;
+            if (title == 'Looking for') {
+              final options = [
+                'Long-term relationship',
+                'Friendly chats',
+                'Dating & Romance',
+                'Casual hangouts',
+                'Networking',
+              ];
+              content = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: options.map((opt) {
+                  final isSelected = _lookingFor == opt;
+                  return ListTile(
+                    leading: Icon(
+                      isSelected ? Icons.check_circle : Icons.circle_outlined,
+                      color: isSelected ? FriendLoopColors.violet : Colors.grey,
+                    ),
+                    title: Text(opt, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: FriendLoopColors.plum)),
+                    trailing: isSelected ? const Icon(Icons.check, color: FriendLoopColors.violet) : null,
+                    onTap: () {
+                      setState(() => _lookingFor = opt);
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Updated Looking for to "$opt"! ✨'), backgroundColor: FriendLoopColors.success),
+                      );
+                    },
+                  );
+                }).toList(),
+              );
+            } else if (title == 'Interests') {
+              final available = [
+                'Long walks with photography 📷',
+                'Biryani 🍛',
+                'Harry Potter ⚡',
+                'Coffee Lover ☕',
+                'Trekking ⛰️',
+                'Music 🎵',
+                'Anime 🍿',
+                'Road Trips 🚗',
+              ];
+              content = Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: available.map((item) {
+                    final isSelected = _interests.contains(item);
+                    return FilterChip(
+                      selected: isSelected,
+                      label: Text(item),
+                      selectedColor: FriendLoopColors.lavender,
+                      checkmarkColor: FriendLoopColors.violet,
+                      onSelected: (val) {
+                        setSheetState(() {
+                          setState(() {
+                            if (val) {
+                              _interests.add(item);
+                            } else {
+                              _interests.remove(item);
+                            }
+                          });
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              );
+            } else {
+              content = Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Customize your $title details in Account Settings.', style: const TextStyle(color: FriendLoopColors.textSecondary)),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 18),
+                        label: Text('Open Settings to Edit $title', style: const TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: FriendLoopColors.violet,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          context.push('/settings');
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 16,
+                left: 16,
+                right: 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Edit $title', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
+                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                    ],
+                  ),
+                  const Divider(),
+                  content,
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).currentUserProfile;
@@ -305,6 +475,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                       ),
+                      // Edit Photo badge
+                      Positioned(
+                        top: 14,
+                        right: 14,
+                        child: GestureDetector(
+                          onTap: _openCamera,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white30),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.camera_alt_outlined, size: 14, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Edit Photo',
+                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                       // Name & Status
                       Positioned(
                         bottom: 14,
@@ -341,7 +538,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+
+              // Edit Profile & Bio Button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push('/settings'),
+                  icon: const Icon(Icons.edit_outlined, size: 16, color: FriendLoopColors.violet),
+                  label: const Text(
+                    'Edit Profile & Bio',
+                    style: TextStyle(color: FriendLoopColors.violet, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: FriendLoopColors.violet),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
 
               // Bio Card
               Container(
@@ -355,13 +571,281 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: FriendLoopColors.textMuted)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: FriendLoopColors.textMuted)),
+                        GestureDetector(
+                          onTap: () => context.push('/settings'),
+                          child: const Text('Edit', style: TextStyle(color: FriendLoopColors.violet, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     Text(bio, style: const TextStyle(fontSize: 14, color: FriendLoopColors.plum, height: 1.3)),
                   ],
                 ),
               ),
               const SizedBox(height: 14),
+
+              // Looking for Card
+              _buildSectionCard(
+                title: 'Looking for',
+                icon: Icons.favorite_outline_rounded,
+                onEdit: () => _openEditSectionSheet('Looking for'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4EBFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: FriendLoopColors.violet.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.favorite, size: 16, color: FriendLoopColors.violet),
+                      const SizedBox(width: 8),
+                      Text(
+                        _lookingFor,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: FriendLoopColors.plum),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Essentials Card
+              _buildSectionCard(
+                title: 'Essentials',
+                icon: Icons.person_pin_circle_outlined,
+                onEdit: () => _openEditSectionSheet('Essentials'),
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.near_me_outlined, _distance),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.height_rounded, _height),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.location_city_outlined, user?.city ?? _city),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.transgender_outlined, _orientation),
+                  ],
+                ),
+              ),
+
+              // Lifestyle Card
+              _buildSectionCard(
+                title: 'Lifestyle',
+                icon: Icons.spa_outlined,
+                onEdit: () => _openEditSectionSheet('Lifestyle'),
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.pets_outlined, _pets),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.local_bar_outlined, _drinking),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.smoke_free_outlined, _smoking),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.fitness_center_outlined, _workouts),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.camera_alt_outlined, _socialMedia),
+                  ],
+                ),
+              ),
+
+              // Basics Card
+              _buildSectionCard(
+                title: 'Basics',
+                icon: Icons.info_outline_rounded,
+                onEdit: () => _openEditSectionSheet('Basics'),
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.auto_awesome_outlined, _zodiac),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.school_outlined, _education),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.child_care_outlined, _familyPlan),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.chat_bubble_outline_rounded, _commStyle),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.favorite_border_rounded, _loveStyle),
+                  ],
+                ),
+              ),
+
+              // Interests Card
+              _buildSectionCard(
+                title: 'Interests',
+                icon: Icons.interests_outlined,
+                onEdit: () => _openEditSectionSheet('Interests'),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _interests
+                      .map((interest) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF4EBFC),
+                              borderRadius: BorderRadius.all(Radius.circular(16)),
+                              border: Border.fromBorderSide(BorderSide(color: Color(0x406E13D8))),
+                            ),
+                            child: Text(
+                              interest,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: FriendLoopColors.plum,
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+
+              // My Favorites Section (Favorited from Discover Friends)
+              Consumer(
+                builder: (context, ref, _) {
+                  final favorites = ref.watch(favoritesProvider);
+                  if (favorites.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: FriendLoopColors.lavender),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.star_rounded, color: FriendLoopColors.gold, size: 20),
+                                SizedBox(width: 6),
+                                Text(
+                                  'My Favorites',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    color: FriendLoopColors.plum,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: FriendLoopColors.lavender,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${favorites.length}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: FriendLoopColors.violet,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 105,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: favorites.length,
+                            itemBuilder: (ctx, idx) {
+                              final fav = favorites[idx];
+                              return GestureDetector(
+                                onTap: () {
+                                  context.push(
+                                    '/friend-profile/${fav.id}',
+                                    extra: FriendItem(
+                                      friendshipId: fav.id,
+                                      friendId: fav.id,
+                                      displayName: fav.displayName,
+                                      avatarUrl: fav.photo,
+                                      city: fav.city,
+                                      state: fav.state ?? 'India',
+                                      age: fav.age,
+                                      bio: fav.bio,
+                                      lookingFor: fav.lookingFor,
+                                      languages: fav.languages,
+                                      images: fav.photos,
+                                      distance: fav.distance,
+                                      height: fav.height,
+                                      orientation: fav.orientation,
+                                      pets: fav.pets,
+                                      drinking: fav.drinking,
+                                      smoking: fav.smoking,
+                                      workouts: fav.workouts,
+                                      socialMedia: fav.socialMedia,
+                                      zodiac: fav.zodiac,
+                                      education: fav.education,
+                                      familyPlan: fav.familyPlan,
+                                      communicationStyle: fav.communicationStyle,
+                                      loveStyle: fav.loveStyle,
+                                      interests: fav.interests,
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  width: 80,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  child: Column(
+                                    children: [
+                                      Stack(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 28,
+                                            backgroundColor: FriendLoopColors.lavender,
+                                            backgroundImage: NetworkImage(fav.photo),
+                                          ),
+                                          Positioned(
+                                            right: 0,
+                                            bottom: 0,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(2),
+                                              decoration: const BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(Icons.star_rounded, color: FriendLoopColors.gold, size: 14),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        fav.displayName.split(' ').first,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: FriendLoopColors.plum,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
 
               // Action Buttons Row (Wallet & Plus)
               Row(
@@ -540,6 +1024,111 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    VoidCallback? onEdit,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEBE6F5), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: FriendLoopColors.lavender.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, size: 16, color: FriendLoopColors.violet),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: FriendLoopColors.plum,
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: onEdit ?? () => context.push('/settings'),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3EBF9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_outlined, size: 13, color: FriendLoopColors.violet),
+                      SizedBox(width: 4),
+                      Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: FriendLoopColors.violet,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildDetailRow(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 17, color: FriendLoopColors.violet),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+              color: FriendLoopColors.plum,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

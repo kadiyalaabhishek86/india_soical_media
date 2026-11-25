@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/friends_provider.dart';
+import '../../core/providers/chats_inbox_provider.dart';
 
 class ChatsInboxScreen extends ConsumerStatefulWidget {
   const ChatsInboxScreen({super.key});
@@ -15,37 +16,6 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
-  // Default featured conversations matching FriendLoop mockup
-  final List<Map<String, dynamic>> _mockConversations = [
-    {
-      'id': 'chat-priya-sharma',
-      'displayName': 'Priya Sharma',
-      'avatar': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-      'lastMessage': 'Hey! Are you free today?',
-      'time': '12:18 PM',
-      'unread': 3,
-      'isOnline': true,
-    },
-    {
-      'id': 'chat-rohan-verma',
-      'displayName': 'Rohan Verma',
-      'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-      'lastMessage': "Let's catch up on a call?",
-      'time': '11:05 AM',
-      'unread': 1,
-      'isOnline': true,
-    },
-    {
-      'id': 'chat-sneha-iyer',
-      'displayName': 'Sneha Iyer',
-      'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
-      'lastMessage': 'That was fun! 😊',
-      'time': 'Yesterday',
-      'unread': 0,
-      'isOnline': false,
-    },
-  ];
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -57,28 +27,18 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
     final friendsState = ref.watch(friendsProvider);
     final friends = friendsState.friends;
 
-    // Merge mock conversations with real friends
-    final List<Map<String, dynamic>> allChats = List.from(_mockConversations);
-    for (final f in friends) {
-      if (!allChats.any((c) => c['displayName'] == f.displayName)) {
-        allChats.add({
-          'id': f.friendshipId,
-          'displayName': f.displayName,
-          'avatar': f.images.isNotEmpty
-              ? f.images.first
-              : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-          'lastMessage': f.lastMessage ?? 'Tap to chat with ${f.displayName}',
-          'time': 'Just now',
-          'unread': 0,
-          'isOnline': true,
-          'friendItem': f,
-        });
+    // Sync friends into shared inbox state
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(chatsInboxProvider.notifier).syncWithFriends(friends);
       }
-    }
+    });
+
+    final allChats = ref.watch(chatsInboxProvider);
 
     final filtered = allChats.where((c) {
       if (_searchQuery.isEmpty) return true;
-      return (c['displayName'] as String).toLowerCase().contains(_searchQuery.toLowerCase());
+      return c.displayName.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
 
     return Scaffold(
@@ -98,6 +58,20 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.done_all_rounded, color: FriendLoopColors.violet),
+            tooltip: 'Mark all as read',
+            onPressed: () {
+              ref.read(chatsInboxProvider.notifier).markAllAsRead();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All messages marked as read! ✓'),
+                  backgroundColor: FriendLoopColors.success,
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.notifications_none_outlined, color: FriendLoopColors.plum),
             onPressed: () {},
@@ -179,36 +153,44 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
                 separatorBuilder: (_, __) => const Divider(height: 1, indent: 64, color: FriendLoopColors.border),
                 itemBuilder: (ctx, idx) {
                   final chat = filtered[idx];
-                  final friend = chat['friendItem'] as FriendItem? ??
+                  final friend = chat.friendItem ??
                       FriendItem(
-                        friendshipId: chat['id'],
-                        friendId: chat['id'],
-                        displayName: chat['displayName'],
+                        friendshipId: chat.id,
+                        friendId: chat.id,
+                        displayName: chat.displayName,
                         state: 'Karnataka',
                         city: 'Bengaluru',
                         age: 24,
                         languages: const ['Hindi', 'English'],
                         lookingFor: 'Conversations & friendship',
-                        images: [chat['avatar']],
-                        lastMessage: chat['lastMessage'],
+                        images: [chat.avatar],
+                        lastMessage: chat.lastMessage,
                       );
 
-                  final unread = (chat['unread'] as int?) ?? 0;
-                  final isOnline = (chat['isOnline'] as bool?) ?? true;
+                  final unread = chat.unread;
+                  final isOnline = chat.isOnline;
 
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                    onTap: () {
-                      context.push(
+                    onTap: () async {
+                      // 1. Clear unread message alert immediately upon opening
+                      ref.read(chatsInboxProvider.notifier).markAsRead(chat.id, chat.displayName);
+
+                      await context.push(
                         '/chat/${friend.friendshipId}',
                         extra: friend,
                       );
+
+                      // 2. Ensure unread count remains cleared upon returning to inbox
+                      if (mounted) {
+                        ref.read(chatsInboxProvider.notifier).markAsRead(chat.id, chat.displayName);
+                      }
                     },
                     leading: Stack(
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundImage: NetworkImage(chat['avatar']),
+                          backgroundImage: NetworkImage(chat.avatar),
                           onBackgroundImageError: (_, __) {},
                           child: const Icon(Icons.person, color: FriendLoopColors.plum),
                         ),
@@ -229,11 +211,11 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
                       ],
                     ),
                     title: Text(
-                      chat['displayName'],
+                      chat.displayName,
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: FriendLoopColors.plum),
                     ),
                     subtitle: Text(
-                      chat['lastMessage'] ?? '',
+                      chat.lastMessage,
                       style: const TextStyle(fontSize: 13, color: FriendLoopColors.textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -243,7 +225,7 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          chat['time'] ?? '',
+                          chat.time,
                           style: const TextStyle(fontSize: 11, color: FriendLoopColors.textMuted),
                         ),
                         const SizedBox(height: 4),

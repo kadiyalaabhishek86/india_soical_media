@@ -5,6 +5,7 @@ import '../../core/network/api_client.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/friends_provider.dart';
+import '../../core/providers/auth_provider.dart';
 
 class FriendProfileScreen extends ConsumerStatefulWidget {
   final String friendshipId;
@@ -22,21 +23,43 @@ class FriendProfileScreen extends ConsumerStatefulWidget {
 
 class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
   final ApiClient _client = ApiClient();
+  final PageController _photoPageController = PageController();
+  int _currentPhotoIndex = 0;
   bool _isLoading = false;
 
   String _displayName = 'Ananya Reddy';
   int _age = 26;
   String? _gender = 'Female';
   String? _state = 'Telangana';
-  String? _city = 'Hyderabad';
+  String? _city = 'Bengaluru';
   String? _languages = 'Telugu, English, Hindi';
   String? _bio = 'Techie, foodie and a movie lover. I enjoy meaningful conversations and making new friends.';
-  String? _lookingFor = 'Friendly chats, voice hangouts and like-minded friends.';
+  String? _lookingFor = 'Long-term relationship';
   List<String> _images = const [
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
     'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
+    'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80',
   ];
   String? _friendId;
+
+  String _distance = '84 miles away';
+  String _height = '168 cm';
+  String _orientation = 'Straight';
+  String _pets = 'Dog lover 🐶';
+  String _drinking = 'Socially 🍷';
+  String _smoking = 'Non-smoker 🚭';
+  String _workouts = 'Regular workouts 💪';
+  String _socialMedia = 'Active on Instagram 📱';
+  String _zodiac = 'Scorpio ♏';
+  String _education = 'Masters Graduate 🎓';
+  String _familyPlan = 'Wants children 👶';
+  String _communicationStyle = 'Big texter & calls 💬';
+  String _loveStyle = 'Quality time & words of affirmation 💜';
+  List<String> _interests = const [
+    'Long walks with photography 📷',
+    'Biryani 🍛',
+    'Harry Potter ⚡',
+  ];
 
   @override
   void initState() {
@@ -50,22 +73,39 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
       _gender = f.gender ?? 'Female';
       _friendId = f.friendId;
       _bio = f.bio ?? _bio;
-      _lookingFor = f.lookingFor ?? _lookingFor;
-      if (f.languages != null) {
-        if (f.languages is List) {
-          _languages = (f.languages as List).join(', ');
-        } else {
-          _languages = f.languages.toString();
-        }
-      }
+      _lookingFor = f.lookingFor ?? 'Long-term relationship';
+      _languages = f.languages ?? _languages;
 
       if (f.images.isNotEmpty) {
         _images = List<String>.from(f.images);
       } else if (f.avatarUrl != null && f.avatarUrl!.isNotEmpty) {
         _images = [f.avatarUrl!];
       }
+
+      _distance = f.distance ?? _distance;
+      _height = f.height ?? _height;
+      _orientation = f.orientation ?? _orientation;
+      _pets = f.pets ?? _pets;
+      _drinking = f.drinking ?? _drinking;
+      _smoking = f.smoking ?? _smoking;
+      _workouts = f.workouts ?? _workouts;
+      _socialMedia = f.socialMedia ?? _socialMedia;
+      _zodiac = f.zodiac ?? _zodiac;
+      _education = f.education ?? _education;
+      _familyPlan = f.familyPlan ?? _familyPlan;
+      _communicationStyle = f.communicationStyle ?? _communicationStyle;
+      _loveStyle = f.loveStyle ?? _loveStyle;
+      if (f.interests != null && f.interests!.isNotEmpty) {
+        _interests = List<String>.from(f.interests!);
+      }
     }
     _loadFriendProfile();
+  }
+
+  @override
+  void dispose() {
+    _photoPageController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadFriendProfile() async {
@@ -80,13 +120,7 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
           _city = data['city'] ?? _city;
           _bio = data['bio'] ?? _bio;
           _lookingFor = data['looking_for'] ?? _lookingFor;
-          if (data['languages'] != null) {
-            if (data['languages'] is List) {
-              _languages = (data['languages'] as List).join(', ');
-            } else {
-              _languages = data['languages'].toString();
-            }
-          }
+          _languages = data['languages'] ?? _languages;
           if (data['images'] != null && (data['images'] as List).isNotEmpty) {
             _images = List<String>.from(data['images']);
           }
@@ -190,14 +224,12 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
           onPressed: () => context.pop(),
         ),
-        title: Image.asset(
-          'assets/images/friendloop_logo.png',
-          height: 28,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Icon(
-            Icons.all_inclusive_rounded,
-            color: FriendLoopColors.violet,
-            size: 28,
+        title: const Text(
+          'User Profile',
+          style: TextStyle(
+            color: FriendLoopColors.plum,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
@@ -259,227 +291,266 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
                   valueColor: AlwaysStoppedAnimation<Color>(FriendLoopColors.violet),
                 ),
 
-              // "User Profile" Title (matching mockup Screen 1)
-              const Text(
-                'User Profile',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                  color: FriendLoopColors.plum,
+              // 1. 3-Photo Horizontal Swiper with page indicator bars
+              Container(
+                height: 320,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      PageView.builder(
+                        controller: _photoPageController,
+                        itemCount: _images.length,
+                        onPageChanged: (idx) => setState(() => _currentPhotoIndex = idx),
+                        itemBuilder: (ctx, idx) {
+                          return Image.network(
+                            _images[idx],
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Image.asset(
+                              'assets/telegram/wallpaper_sample.png',
+                              fit: BoxFit.cover,
+                            ),
+                          );
+                        },
+                      ),
+                      // Segmented progress bars at top
+                      if (_images.length > 1)
+                        Positioned(
+                          top: 12,
+                          left: 14,
+                          right: 14,
+                          child: Row(
+                            children: List.generate(_images.length, (pIdx) {
+                              final isCur = pIdx == _currentPhotoIndex;
+                              return Expanded(
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                                  height: 3.5,
+                                  decoration: BoxDecoration(
+                                    color: isCur ? Colors.white : Colors.white.withValues(alpha: 0.45),
+                                    borderRadius: BorderRadius.circular(2),
+                                    boxShadow: const [
+                                      BoxShadow(color: Colors.black26, blurRadius: 2),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      // Gradient overlay
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.75),
+                            ],
+                            stops: const [0.55, 1.0],
+                          ),
+                        ),
+                      ),
+                      // Name & Age & Online status on photo
+                      Positioned(
+                        bottom: 14,
+                        left: 16,
+                        right: 16,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  _displayName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    shadows: [
+                                      Shadow(color: Colors.black54, blurRadius: 4),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  ', $_age',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    shadows: [
+                                      Shadow(color: Colors.black54, blurRadius: 4),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: FriendLoopColors.onlineGreen,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                const Text(
+                                  'Online',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '• ${_city ?? "Bengaluru"}',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
 
-              // 1. Main Profile Card (Rounded photo, Name, Age/Online, City, Languages)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: FriendLoopColors.lavender),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
+              // 2. Looking For Card
+              _buildSectionCard(
+                title: 'Looking for',
+                icon: Icons.favorite_outline_rounded,
+                child: Text(
+                  _lookingFor ?? 'Long-term relationship',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: FriendLoopColors.plum,
+                  ),
+                ),
+              ),
+
+              // 3. Essentials Card
+              _buildSectionCard(
+                title: 'Essentials',
+                icon: Icons.person_pin_circle_outlined,
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.near_me_outlined, _distance),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.height_rounded, 'Height $_height'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.location_city_outlined, _city ?? 'Bengaluru'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.transgender_outlined, _orientation),
                   ],
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+
+              // 4. Lifestyle Card
+              _buildSectionCard(
+                title: 'Lifestyle',
+                icon: Icons.spa_outlined,
+                child: Column(
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.network(
-                        avatarUrl,
-                        width: 90,
-                        height: 90,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.asset(
-                          'assets/telegram/wallpaper_sample.png',
-                          width: 90,
-                          height: 90,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _displayName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 19,
-                              color: FriendLoopColors.plum,
+                    _buildDetailRow(Icons.pets_outlined, 'Pets: $_pets'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.local_bar_outlined, 'Drinking: $_drinking'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.smoke_free_outlined, 'Smoking: $_smoking'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.fitness_center_outlined, 'Workouts: $_workouts'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.camera_alt_outlined, 'Social media: $_socialMedia'),
+                  ],
+                ),
+              ),
+
+              // 5. Basics Card
+              _buildSectionCard(
+                title: 'Basics',
+                icon: Icons.info_outline_rounded,
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.auto_awesome_outlined, 'Zodiac: $_zodiac'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.school_outlined, 'Education: $_education'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.child_care_outlined, 'Family plan: $_familyPlan'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.chat_bubble_outline_rounded, 'Communication style: $_communicationStyle'),
+                    const SizedBox(height: 10),
+                    _buildDetailRow(Icons.favorite_border_rounded, 'Love style: $_loveStyle'),
+                  ],
+                ),
+              ),
+
+              // 6. Interests Card
+              _buildSectionCard(
+                title: 'Interests',
+                icon: Icons.interests_outlined,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _interests
+                      .map((interest) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: FriendLoopColors.lavender.withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: FriendLoopColors.violet.withValues(alpha: 0.25)),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Text(
-                                '${_gender == 'Female' ? '♀ ' : '♂ '}$_age • ',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: FriendLoopColors.textSecondary,
-                                ),
+                            child: Text(
+                              interest,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: FriendLoopColors.plum,
                               ),
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: FriendLoopColors.onlineGreen,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Text(
-                                'Online',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: FriendLoopColors.onlineGreen,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on_outlined, size: 14, color: FriendLoopColors.textMuted),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  '${_city ?? 'Hyderabad'}, ${_state ?? 'India'}',
-                                  style: const TextStyle(fontSize: 12, color: FriendLoopColors.textSecondary),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.language_outlined, size: 14, color: FriendLoopColors.textMuted),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  'Languages: ${_languages ?? 'Telugu, English, Hindi'}',
-                                  style: const TextStyle(fontSize: 12, color: FriendLoopColors.textSecondary),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                            ),
+                          ))
+                      .toList(),
                 ),
               ),
-              const SizedBox(height: 12),
 
-              // 2. Bio Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: FriendLoopColors.lavender),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.person_outline, size: 18, color: FriendLoopColors.violet),
-                        SizedBox(width: 8),
-                        Text(
-                          'Bio',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: FriendLoopColors.plum,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _bio ?? 'Techie, foodie and a movie lover. I enjoy meaningful conversations and making new friends.',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.4,
-                        color: FriendLoopColors.plum,
-                      ),
-                    ),
-                  ],
+              // 7. Bio Card
+              _buildSectionCard(
+                title: 'Bio',
+                icon: Icons.person_outline,
+                child: Text(
+                  _bio ?? 'Techie, foodie and a movie lover. I enjoy meaningful conversations and making new friends.',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: FriendLoopColors.plum,
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
 
-              // 3. Looking For Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: FriendLoopColors.lavender),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.track_changes_outlined, size: 18, color: FriendLoopColors.violet),
-                        SizedBox(width: 8),
-                        Text(
-                          'Looking for',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: FriendLoopColors.plum,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _lookingFor ?? 'Friendly chats, voice hangouts and like-minded friends.',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.4,
-                        color: FriendLoopColors.plum,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 4. + Add Friend Button
+              // 8. + Add Friend Button
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -510,24 +581,83 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
               ),
               const SizedBox(height: 18),
 
-              // 5. Circular Action Buttons Row: Voice, Video, Chat
+              // 9. Circular Action Buttons Row: Voice, Video, Chat
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildActionCircle(
                     icon: Icons.mic_none_outlined,
                     label: 'Voice',
-                    onTap: () => context.push('/call'),
+                    onTap: () {
+                      final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
+                      if (userCoins < 10) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Insufficient coins for Voice Call (10 coins required, you have $userCoins). Please recharge.'),
+                            backgroundColor: FriendLoopColors.plum,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                        context.push('/wallet');
+                        return;
+                      }
+                      ref.read(authProvider.notifier).updateCoins(userCoins - 10);
+                      final f = widget.initialFriend ?? FriendItem(
+                        friendshipId: widget.friendshipId,
+                        friendId: _friendId ?? '',
+                        displayName: _displayName,
+                        state: _state ?? 'India',
+                        city: _city,
+                        images: _images,
+                      );
+                      context.push('/call', extra: f);
+                    },
                   ),
                   _buildActionCircle(
                     icon: Icons.videocam_outlined,
                     label: 'Video',
-                    onTap: () => context.push('/call'),
+                    onTap: () {
+                      final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
+                      if (userCoins < 40) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Insufficient coins for Video Call (40 coins required, you have $userCoins). Please recharge.'),
+                            backgroundColor: FriendLoopColors.plum,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                        context.push('/wallet');
+                        return;
+                      }
+                      ref.read(authProvider.notifier).updateCoins(userCoins - 40);
+                      final f = widget.initialFriend ?? FriendItem(
+                        friendshipId: widget.friendshipId,
+                        friendId: _friendId ?? '',
+                        displayName: _displayName,
+                        state: _state ?? 'India',
+                        city: _city,
+                        images: _images,
+                      );
+                      context.push('/call/video', extra: f);
+                    },
                   ),
                   _buildActionCircle(
                     icon: Icons.chat_bubble_outline,
                     label: 'Chat',
                     onTap: () {
+                      final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
+                      if (userCoins < 5) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Insufficient coins for Chat (5 coins required, you have $userCoins). Please recharge.'),
+                            backgroundColor: FriendLoopColors.plum,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                        context.push('/wallet');
+                        return;
+                      }
+                      ref.read(authProvider.notifier).updateCoins(userCoins - 5);
                       context.push('/chat/${widget.friendshipId}', extra: widget.initialFriend);
                     },
                   ),
@@ -541,17 +671,82 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
     );
   }
 
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: FriendLoopColors.lavender),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: FriendLoopColors.violet),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: FriendLoopColors.plum,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: FriendLoopColors.violet),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: FriendLoopColors.plum,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActionCircle({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
   }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
             width: 54,
             height: 54,
             decoration: BoxDecoration(
@@ -568,17 +763,17 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
             ),
             child: Icon(icon, color: FriendLoopColors.violet, size: 24),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: FriendLoopColors.plum,
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: FriendLoopColors.plum,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

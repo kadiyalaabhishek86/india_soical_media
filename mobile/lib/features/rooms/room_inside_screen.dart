@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/colors.dart';
 import '../../core/network/api_client.dart';
+import '../../core/constants/api_endpoints.dart';
+import 'games/carrom_clash_game_view.dart';
+import 'games/voice_mimic_party_view.dart';
+import 'games/truth_or_dare_game_view.dart';
+import 'games/ludo_party_game_view.dart';
 
 class RoomInsideScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -24,8 +30,8 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
   bool _isMuted = false;
   bool _isCameraOff = false;
   bool _isSpeaker = false;
-  bool _showGameOverlay = false;
   String _activeGame = 'none';
+  int _viewMode = 0; // 0 = Game Arena, 1 = Room Stage
 
   final List<Map<String, dynamic>> _mockVideoParticipants = [
     {
@@ -59,16 +65,23 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
     super.initState();
     _room = widget.initialRoomData;
     _activeGame = _room?['activity_type'] ?? 'none';
+    if (_activeGame == 'carrom' || _activeGame == 'ludo' || _activeGame == 'truth_or_dare' || _activeGame == 'voice_mimic') {
+      _viewMode = 0; // Default to Game Arena if a game activity is selected
+    } else {
+      _viewMode = 1; // Default to Room Stage for voice_lounge or video_stage
+    }
     _fetchDetail();
   }
 
   Future<void> _fetchDetail() async {
     try {
       final res = await _client.get('/rooms/${widget.roomId}');
-      if (mounted) {
+      if (mounted && res is Map<String, dynamic>) {
         setState(() {
           _room = res;
-          _activeGame = res['activity_type'] ?? _activeGame;
+          if (_activeGame == 'none') {
+            _activeGame = res['activity_type'] ?? 'carrom';
+          }
         });
       }
     } catch (_) {}
@@ -91,6 +104,77 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
     if (mounted) context.pop();
   }
 
+  void _showGameSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Choose Party Game', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: FriendLoopColors.plum)),
+            const SizedBox(height: 14),
+            ListTile(
+              leading: const Text('🎯', style: TextStyle(fontSize: 26)),
+              title: const Text('Carrom Clash', style: TextStyle(fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
+              subtitle: const Text('Pocket coins & queen for 20 coin pot'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _activeGame = 'carrom';
+                  _viewMode = 0;
+                });
+              },
+            ),
+            ListTile(
+              leading: const Text('🐱', style: TextStyle(fontSize: 26)),
+              title: const Text('Voice Mimic (Talking Tom)', style: TextStyle(fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
+              subtitle: const Text('Helium pitch voice mimic & SFX soundboard'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _activeGame = 'voice_mimic';
+                  _viewMode = 0;
+                });
+              },
+            ),
+            ListTile(
+              leading: const Text('🍾', style: TextStyle(fontSize: 26)),
+              title: const Text('Truth or Dare (Spin the Bottle)', style: TextStyle(fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
+              subtitle: const Text('Spin bottle, confess romance secrets or dares'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _activeGame = 'truth_or_dare';
+                  _viewMode = 0;
+                });
+              },
+            ),
+            ListTile(
+              leading: const Text('🎲', style: TextStyle(fontSize: 26)),
+              title: const Text('Ludo 2v2 Arena', style: TextStyle(fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
+              subtitle: const Text('2v2 team board game with 3D dice rolls'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _activeGame = 'ludo';
+                  _viewMode = 0;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showChatDialog() {
     showModalBottomSheet(
       context: context,
@@ -103,14 +187,14 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
           height: 380,
           child: Column(
             children: [
-              Text('Room Chat (${widget.initialRoomData?['title'] ?? 'Party'})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('Room Chat (${_room?['title'] ?? 'Party'})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const Divider(),
               Expanded(
                 child: ListView(
                   children: const [
                     ListTile(leading: CircleAvatar(child: Text('R')), title: Text('Rahul'), subtitle: Text('Welcome everyone to the room! 🎉')),
-                    ListTile(leading: CircleAvatar(child: Text('P')), title: Text('Priya'), subtitle: Text('Hey all! Who is playing Ludo?')),
-                    ListTile(leading: CircleAvatar(child: Text('K')), title: Text('Karan'), subtitle: Text('I am in! Let’s roll! 🎲')),
+                    ListTile(leading: CircleAvatar(child: Text('P')), title: Text('Priya'), subtitle: Text('Hey all! Who is playing with us?')),
+                    ListTile(leading: CircleAvatar(child: Text('K')), title: Text('Karan'), subtitle: Text('I am in! Let’s go! 🎯')),
                   ],
                 ),
               ),
@@ -129,11 +213,116 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
     );
   }
 
+  void _showReportRoomDialog() {
+    final reasons = [
+      'Inappropriate audio or video',
+      'Underage participants (Minor safety)',
+      'Harassment or abusive speech',
+      'Spam or deceptive behavior',
+    ];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Report Room', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Report "${_room?['title'] ?? 'Party Room'}" to 24/7 moderation:', style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            ...reasons.map(
+              (r) => ListTile(
+                title: Text(r, style: const TextStyle(fontSize: 14)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await _client.post(
+                      '/moderation/report',
+                      body: {
+                        'target_type': 'room',
+                        'target_id': widget.roomId,
+                        'reason': r,
+                      },
+                    );
+                  } catch (_) {}
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Room reported. Our safety team is actively investigating.'),
+                        backgroundColor: FriendLoopColors.violet,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmBlockHost() {
+    final hostId = _room?['host_id'] ?? 'host_user';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block Host?'),
+        content: const Text('Are you sure you want to block the host of this room? You will leave the room and their content will be hidden from you.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: FriendLoopColors.rose),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await _client.post(
+                  ApiEndpoints.block,
+                  body: {'blocked_id': hostId},
+                );
+              } catch (_) {}
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Host has been blocked.'), backgroundColor: FriendLoopColors.rose),
+                );
+                _handleLeave();
+              }
+            },
+            child: const Text('Block & Leave', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = _room?['title'] ?? 'Party Room';
     final isVideo = _room?['room_type'] == 'video';
     final count = _room?['active_count'] ?? 4;
+
+    // Check if an interactive game is selected and user is in Game Arena mode
+    final isGameActive = _activeGame == 'carrom' ||
+        _activeGame == 'voice_mimic' ||
+        _activeGame == 'truth_or_dare' ||
+        _activeGame == 'ludo';
+
+    if (_viewMode == 0 && isGameActive) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF9F7FC),
+        body: Column(
+          children: [
+            // Mode Switcher Banner (Game Arena vs Stage)
+            _buildViewModeToggle(),
+
+            // Active Game Screen
+            Expanded(
+              child: _buildActiveGameView(),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isVideo ? Colors.black : FriendLoopColors.canvas,
@@ -152,31 +341,81 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isVideo ? Colors.white : FriendLoopColors.plum),
             ),
             Text(
-              '${isVideo ? 'Video' : 'Live Voice Room'} • $count in room',
+              '${isVideo ? 'Video Stage' : 'Live Voice Room'} • $count in room',
               style: TextStyle(fontSize: 12, color: isVideo ? Colors.white70 : FriendLoopColors.textSecondary),
             ),
           ],
         ),
         actions: [
-          // Activity / Game Button toggle
-          if (_activeGame != 'none' && _activeGame != 'voice_lounge' && _activeGame != 'video_stage')
-            IconButton(
-              icon: const Icon(Icons.casino_outlined, color: FriendLoopColors.gold),
-              onPressed: () => setState(() => _showGameOverlay = !_showGameOverlay),
-            ),
+          // Game Controller icon to launch/switch games
+          IconButton(
+            icon: const Icon(Icons.sports_esports, color: FriendLoopColors.violet),
+            tooltip: 'Choose Party Game',
+            onPressed: _showGameSelector,
+          ),
           IconButton(
             icon: Icon(Icons.person_add_alt, color: isVideo ? Colors.white : FriendLoopColors.plum),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invite link copied!')));
             },
           ),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: isVideo ? Colors.white : FriendLoopColors.plum),
+            onSelected: (val) async {
+              if (val == 'report') {
+                _showReportRoomDialog();
+              } else if (val == 'block') {
+                _confirmBlockHost();
+              } else if (val == 'safety') {
+                final url = Uri.parse('${ApiEndpoints.rootUrl}/child-safety');
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, size: 20, color: Colors.amber),
+                    SizedBox(width: 10),
+                    Text('Report Room'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(Icons.block, size: 20, color: FriendLoopColors.rose),
+                    SizedBox(width: 10),
+                    Text('Block Host', style: TextStyle(color: FriendLoopColors.rose)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'safety',
+                child: Row(
+                  children: [
+                    Icon(Icons.verified_user_outlined, size: 20, color: FriendLoopColors.violet),
+                    SizedBox(width: 10),
+                    Text('Child Safety (18+)'),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // Game Arena Banner if game active
-            if (_showGameOverlay || _activeGame == 'ludo' || _activeGame == 'carrom' || _activeGame == 'truth_or_dare' || _activeGame == 'voice_mimic')
+            // Top toggle between Game Arena and Room Stage
+            _buildViewModeToggle(),
+
+            // Game Banner if game selected
+            if (isGameActive)
               _buildGameBanner(),
 
             // Main Room Content
@@ -192,27 +431,113 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
     );
   }
 
+  Widget _buildViewModeToggle() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (_activeGame == 'none') {
+                  _activeGame = 'carrom';
+                }
+                setState(() => _viewMode = 0);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: _viewMode == 0 ? FriendLoopColors.violet : const Color(0xFFF3EDFA),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.sports_esports, size: 16, color: _viewMode == 0 ? Colors.white : FriendLoopColors.plum),
+                    const SizedBox(width: 6),
+                    Text(
+                      '🎮 Game Arena',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _viewMode == 0 ? Colors.white : FriendLoopColors.plum),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _viewMode = 1),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: _viewMode == 1 ? FriendLoopColors.violet : const Color(0xFFF3EDFA),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.mic, size: 16, color: _viewMode == 1 ? Colors.white : FriendLoopColors.plum),
+                    const SizedBox(width: 6),
+                    Text(
+                      '🎙️ Room Stage',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _viewMode == 1 ? Colors.white : FriendLoopColors.plum),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            icon: const Icon(Icons.tune, color: FriendLoopColors.violet, size: 20),
+            tooltip: 'Switch Game',
+            onPressed: _showGameSelector,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveGameView() {
+    switch (_activeGame) {
+      case 'carrom':
+        return CarromClashGameView(onBack: _handleLeave, roomData: _room);
+      case 'voice_mimic':
+        return VoiceMimicPartyView(onBack: _handleLeave, roomData: _room);
+      case 'truth_or_dare':
+        return TruthOrDareGameView(onBack: _handleLeave, roomData: _room);
+      case 'ludo':
+        return LudoPartyGameView(onBack: _handleLeave, roomData: _room);
+      default:
+        return CarromClashGameView(onBack: _handleLeave, roomData: _room);
+    }
+  }
+
   Widget _buildGameBanner() {
     String gameTitle = 'Party Game Active';
-    String gameDesc = 'Tap to roll dice or pick card';
+    String gameDesc = 'Tap to play in full screen';
     IconData icon = Icons.sports_esports;
 
-    if (_activeGame == 'ludo') {
-      gameTitle = 'Ludo 2v2 Arena 🎲';
-      gameDesc = 'Rahul & Priya vs Karan & Ananya';
-      icon = Icons.casino;
-    } else if (_activeGame == 'carrom') {
+    if (_activeGame == 'carrom') {
       gameTitle = 'Carrom Clash 🎯';
-      gameDesc = 'White: 4 | Black: 5 | Queen in center';
+      gameDesc = 'Match #408 • 20 Coin Pot • Striker Ready!';
       icon = Icons.adjust;
-    } else if (_activeGame == 'truth_or_dare') {
-      gameTitle = 'Truth or Dare 🎭';
-      gameDesc = 'Turn: Karan Desai — Question: What was your most embarrassing moment?';
-      icon = Icons.psychology;
     } else if (_activeGame == 'voice_mimic') {
       gameTitle = 'Voice Mimic Party 🐱';
-      gameDesc = 'Pitch modifier active (+4 semitones)';
+      gameDesc = 'Party #104 • Talking Tom Squeak Active!';
       icon = Icons.record_voice_over;
+    } else if (_activeGame == 'truth_or_dare') {
+      gameTitle = 'Truth or Dare 🍾';
+      gameDesc = 'Party #104 • Flirt & Crush • Spin the Bottle!';
+      icon = Icons.psychology;
+    } else if (_activeGame == 'ludo') {
+      gameTitle = 'Ludo 2v2 Arena 🎲';
+      gameDesc = 'Table #12 • Team Violet vs Rivals • Roll a 6!';
+      icon = Icons.casino;
     }
 
     return Container(
@@ -238,18 +563,14 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
             ),
           ),
           ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Action taken in $gameTitle! 🎯'), backgroundColor: FriendLoopColors.success),
-              );
-            },
+            onPressed: () => setState(() => _viewMode = 0),
             style: ElevatedButton.styleFrom(
               backgroundColor: FriendLoopColors.gold,
               foregroundColor: FriendLoopColors.plum,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: Size.zero,
             ),
-            child: const Text('Play Turn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: const Text('Play Arena >>', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
           ),
         ],
       ),
@@ -275,7 +596,6 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
               fit: StackFit.expand,
               children: [
                 Image.network(p['image'], fit: BoxFit.cover),
-                // Speaking indicator border
                 if (p['isSpeaking'] == true)
                   Container(
                     decoration: BoxDecoration(
@@ -283,7 +603,6 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                // Name & Role tag
                 Positioned(
                   bottom: 8,
                   left: 8,
@@ -296,9 +615,7 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
                     ),
                     child: Row(
                       children: [
-                        if (p['role'] == 'Host') ...[
-                          const Text('👑 ', style: TextStyle(fontSize: 10)),
-                        ],
+                        if (p['role'] == 'Host') const Text('👑 ', style: TextStyle(fontSize: 10)),
                         Expanded(
                           child: Text(
                             p['name'],
@@ -381,7 +698,7 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
               _buildListenerAvatar('Arjun P'),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
           // Request to Speak Button
           if (!_isSpeaker)
@@ -469,18 +786,20 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Mic Toggle
           IconButton(
             icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, color: _isMuted ? FriendLoopColors.rose : FriendLoopColors.violet),
             onPressed: () => setState(() => _isMuted = !_isMuted),
           ),
-          // Camera Toggle (if Video)
           if (isVideo)
             IconButton(
               icon: Icon(_isCameraOff ? Icons.videocam_off : Icons.videocam, color: _isCameraOff ? FriendLoopColors.rose : FriendLoopColors.violet),
               onPressed: () => setState(() => _isCameraOff = !_isCameraOff),
             ),
-          // In-Room Chat
+          IconButton(
+            icon: const Icon(Icons.sports_esports, color: FriendLoopColors.violet),
+            tooltip: 'Choose Party Game',
+            onPressed: _showGameSelector,
+          ),
           IconButton(
             icon: const Badge(
               label: Text('12'),
@@ -488,7 +807,6 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
             ),
             onPressed: _showChatDialog,
           ),
-          // Leave Button
           ElevatedButton.icon(
             onPressed: _handleLeave,
             icon: const Icon(Icons.exit_to_app, color: Colors.white, size: 16),

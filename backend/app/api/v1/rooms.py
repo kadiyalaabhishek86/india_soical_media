@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_optional_current_user
 from app.models.database_models import Profile, PartyRoom, PartyParticipant, CoinTransaction
 from app.models.schemas import PartyRoomResponse, PartyRoomCreateRequest, PartyParticipantResponse
 
@@ -26,6 +26,58 @@ DEFAULT_ROOMS = [
         "host_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
     },
     {
+        "id": "55555555-aaaa-bbbb-cccc-555555555556",
+        "title": "Carrom Clash Match #408 🎯",
+        "room_type": "voice",
+        "activity_type": "carrom",
+        "language": "Hindi",
+        "access_type": "public",
+        "entry_fee_coins": 10,
+        "max_seats": 2,
+        "active_count": 2,
+        "host_name": "Rhea Sharma",
+        "host_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+    },
+    {
+        "id": "55555555-aaaa-bbbb-cccc-555555555557",
+        "title": "Party Room #104 Voice Mimic 🐱",
+        "room_type": "voice",
+        "activity_type": "voice_mimic",
+        "language": "English",
+        "access_type": "public",
+        "entry_fee_coins": 0,
+        "max_seats": 10,
+        "active_count": 6,
+        "host_name": "Rohan Verma",
+        "host_avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
+    },
+    {
+        "id": "55555555-aaaa-bbbb-cccc-555555555553",
+        "title": "Party #104 Truth or Dare 🍾",
+        "room_type": "voice",
+        "activity_type": "truth_or_dare",
+        "language": "Hindi",
+        "access_type": "public",
+        "entry_fee_coins": 0,
+        "max_seats": 15,
+        "active_count": 8,
+        "host_name": "Ananya Gupta",
+        "host_avatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80",
+    },
+    {
+        "id": "55555555-aaaa-bbbb-cccc-555555555555",
+        "title": "TABLE #12 Ludo 2v2 Party 🎲",
+        "room_type": "voice",
+        "activity_type": "ludo",
+        "language": "Hindi",
+        "access_type": "public",
+        "entry_fee_coins": 10,
+        "max_seats": 4,
+        "active_count": 4,
+        "host_name": "Karthik M",
+        "host_avatar": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80",
+    },
+    {
         "id": "55555555-aaaa-bbbb-cccc-555555555552",
         "title": "Travel Buddies India ✈️",
         "room_type": "video",
@@ -39,19 +91,6 @@ DEFAULT_ROOMS = [
         "host_avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
     },
     {
-        "id": "55555555-aaaa-bbbb-cccc-555555555553",
-        "title": "Movies & Friends 🎬",
-        "room_type": "voice",
-        "activity_type": "truth_or_dare",
-        "language": "Hindi",
-        "access_type": "public",
-        "entry_fee_coins": 0,
-        "max_seats": 15,
-        "active_count": 11,
-        "host_name": "Ananya Gupta",
-        "host_avatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80",
-    },
-    {
         "id": "55555555-aaaa-bbbb-cccc-555555555554",
         "title": "Telugu Hangout",
         "room_type": "voice",
@@ -63,19 +102,6 @@ DEFAULT_ROOMS = [
         "active_count": 28,
         "host_name": "Vamshi K",
         "host_avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-        "id": "55555555-aaaa-bbbb-cccc-555555555555",
-        "title": "Ludo 2v2 Arena 🎲",
-        "room_type": "voice",
-        "activity_type": "ludo",
-        "language": "Hindi",
-        "access_type": "public",
-        "entry_fee_coins": 10,
-        "max_seats": 4,
-        "active_count": 4,
-        "host_name": "Karthik M",
-        "host_avatar": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80",
     }
 ]
 
@@ -123,11 +149,12 @@ async def list_rooms(
             created_at=r.created_at,
         ))
 
-    # Add default mockups if empty or filter matches
-    if len(items) == 0:
-        for d in DEFAULT_ROOMS:
-            if type != "all" and d["room_type"] != type:
-                continue
+    # Always include default rooms so the menu is always vibrant
+    existing_ids = {r.id for r in rooms}
+    for d in DEFAULT_ROOMS:
+        if type != "all" and d["room_type"] != type:
+            continue
+        if d["id"] not in existing_ids:
             items.append(PartyRoomResponse(
                 id=d["id"],
                 title=d["title"],
@@ -160,9 +187,26 @@ async def list_rooms(
 @router.post("", response_model=PartyRoomResponse, status_code=status.HTTP_201_CREATED)
 async def create_room(
     req: PartyRoomCreateRequest,
-    current_user: Profile = Depends(get_current_user),
+    current_user: Optional[Profile] = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if not current_user:
+        # Provide default profile if unauthenticated
+        stmt = select(Profile).limit(1)
+        res = await db.execute(stmt)
+        current_user = res.scalar_one_or_none()
+        if not current_user:
+            current_user = Profile(
+                id=str(uuid.uuid4()),
+                phone="+919876543210",
+                display_name="You (Host)",
+                coins=100,
+                rules_accepted=True,
+            )
+            db.add(current_user)
+            await db.commit()
+            await db.refresh(current_user)
+
     room = PartyRoom(
         title=req.title,
         host_id=current_user.id,

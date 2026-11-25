@@ -65,6 +65,7 @@ async def purchase_coins(
     pack = PACKS.get(req.pack_id)
     coins_to_add = pack["coins"] if pack else req.coins
     price = pack["price_inr"] if pack else req.price_inr
+    billing_label = "Google Play Billing" if (req.payment_method or "google_play") == "google_play" else "Alternative Billing (Razorpay)"
 
     current_user.coins += coins_to_add
 
@@ -72,7 +73,7 @@ async def purchase_coins(
         user_id=current_user.id,
         amount=coins_to_add,
         transaction_type="purchase",
-        description=f"Purchased {coins_to_add} coins for ₹{int(price)}",
+        description=f"Purchased {coins_to_add} coins for ₹{int(price)} via {billing_label}",
         reference_id=f"pay_{int(datetime.utcnow().timestamp())}",
     )
     db.add(tx)

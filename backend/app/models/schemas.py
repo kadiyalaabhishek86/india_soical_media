@@ -69,7 +69,7 @@ class ProfileCreateRequest(BaseModel):
         today = date.today()
         age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
         if age < 18:
-            raise ValueError("You must be at least 18 years old to join Aara.")
+            raise ValueError("FriendLoop is strictly an 18+ community. You must be at least 18 years old to join FriendLoop.")
         return v
 
 class ProfileUpdateRequest(BaseModel):
@@ -92,7 +92,7 @@ class ProfileUpdateRequest(BaseModel):
             today = date.today()
             age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
             if age < 18:
-                raise ValueError("You must be at least 18 years old to join Aara.")
+                raise ValueError("FriendLoop is strictly an 18+ community. You must be at least 18 years old to join FriendLoop.")
         return v
 
 class ImageUploadRequest(BaseModel):
@@ -247,7 +247,9 @@ class BlockUserRequest(BaseModel):
     reason: Optional[str] = None
 
 class ReportRequest(BaseModel):
-    reported_id: str
+    reported_id: Optional[str] = None
+    target_id: Optional[str] = None
+    target_type: Optional[str] = None # 'user', 'reel', 'room', 'call', 'message'
     call_id: Optional[str] = None
     reason: str # harassment, threats, scam, underage, inappropriate_content, other
     details: Optional[str] = None
@@ -430,6 +432,7 @@ class CoinPackPurchaseRequest(BaseModel):
     pack_id: str # 'pack_40', 'pack_100', 'pack_275'
     coins: int
     price_inr: float
+    payment_method: Optional[str] = "google_play" # "google_play" (Play Billing) or "alternative_razorpay" (User Choice Billing India)
 
 class CoinTransactionResponse(BaseModel):
     id: str

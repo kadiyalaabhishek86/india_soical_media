@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
-import '../../core/network/api_client.dart';
+import '../../core/providers/rooms_provider.dart';
 
 class CreateRoomScreen extends ConsumerStatefulWidget {
   const CreateRoomScreen({super.key});
@@ -12,7 +12,6 @@ class CreateRoomScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
-  final ApiClient _client = ApiClient();
   final _roomNameController = TextEditingController(text: 'Evening Hangout');
   String _selectedLanguage = 'Hindi';
   String _roomType = 'voice'; // 'voice' or 'video'
@@ -58,20 +57,17 @@ class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final res = await _client.post(
-        '/rooms',
-        body: {
-          'title': title,
-          'room_type': _roomType,
-          'activity_type': _activityType,
-          'language': _selectedLanguage,
-          'access_type': _access,
-          'entry_fee_coins': _entryFee.round(),
-          'max_seats': _roomType == 'video' ? 6 : 12,
-        },
+      final room = await ref.read(roomsProvider.notifier).createRoom(
+        title: title,
+        roomType: _roomType,
+        activityType: _activityType,
+        language: _selectedLanguage,
+        accessType: _access,
+        entryFeeCoins: _entryFee.round(),
+        maxSeats: _roomType == 'video' ? 6 : 12,
       );
       if (!mounted) return;
-      context.pushReplacement('/room/${res['id']}', extra: res);
+      context.pushReplacement('/room/${room.id}', extra: room.toJson());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

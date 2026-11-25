@@ -298,13 +298,13 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
                 _buildActionBtn(
                   icon: Icons.phone_outlined,
                   tooltip: 'Voice Call',
-                  onTap: () => context.push('/call'),
+                  onTap: () => context.push('/call', extra: friend),
                 ),
                 const SizedBox(width: 6),
                 _buildActionBtn(
                   icon: Icons.videocam_outlined,
                   tooltip: 'Video Call',
-                  onTap: () => context.push('/call'),
+                  onTap: () => context.push('/call/video', extra: friend),
                 ),
                 const SizedBox(width: 6),
                 _buildActionBtn(

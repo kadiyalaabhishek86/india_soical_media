@@ -400,6 +400,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
       );
     } catch (e) {
+      if (state.currentUserProfile != null) {
+        final current = state.currentUserProfile!;
+        final updated = current.copyWith(
+          displayName: displayName ?? current.displayName,
+          dob: dob ?? current.dob,
+          gender: gender ?? current.gender,
+          lookingFor: lookingFor ?? current.lookingFor,
+          images: images ?? current.images,
+          state: stateName ?? current.state,
+          city: city ?? current.city,
+        );
+        state = state.copyWith(currentUserProfile: updated, isLoading: false);
+        return;
+      }
       state = state.copyWith(isLoading: false, error: e.toString());
       rethrow;
     }

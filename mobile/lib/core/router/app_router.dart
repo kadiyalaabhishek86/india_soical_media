@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/welcome_screen.dart';
 import '../../features/auth/otp_verification_screen.dart';
@@ -6,6 +7,10 @@ import '../../features/home/main_shell_screen.dart';
 import '../../features/reels/create_reel_screen.dart';
 import '../../features/rooms/create_room_screen.dart';
 import '../../features/rooms/room_inside_screen.dart';
+import '../../features/rooms/games/carrom_clash_game_view.dart';
+import '../../features/rooms/games/voice_mimic_party_view.dart';
+import '../../features/rooms/games/truth_or_dare_game_view.dart';
+import '../../features/rooms/games/ludo_party_game_view.dart';
 import '../../features/friends/friends_list_screen.dart';
 import '../../features/friends/friend_requests_screen.dart';
 import '../../features/match/random_connect_screen.dart';
@@ -18,6 +23,7 @@ import '../../features/profile/blocked_users_screen.dart';
 import '../../features/friends/private_chat_screen.dart';
 import '../../features/friends/friend_profile_screen.dart';
 import '../../features/call/voice_call_screen.dart';
+import '../../features/call/video_call_screen.dart';
 import '../../features/match/queue_screen.dart';
 import '../../features/post_call/post_call_screen.dart';
 import '../../features/admin/admin_dashboard_screen.dart';
@@ -83,6 +89,22 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/create-room',
       builder: (context, state) => const CreateRoomScreen(),
+    ),
+    GoRoute(
+      path: '/game/carrom',
+      builder: (context, state) => const Scaffold(body: CarromClashGameView()),
+    ),
+    GoRoute(
+      path: '/game/voice-mimic',
+      builder: (context, state) => const Scaffold(body: VoiceMimicPartyView()),
+    ),
+    GoRoute(
+      path: '/game/truth-or-dare',
+      builder: (context, state) => const Scaffold(body: TruthOrDareGameView()),
+    ),
+    GoRoute(
+      path: '/game/ludo',
+      builder: (context, state) => const Scaffold(body: LudoPartyGameView()),
     ),
     GoRoute(
       path: '/room/:id',
@@ -158,7 +180,29 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/call',
-      builder: (context, state) => const VoiceCallScreen(),
+      builder: (context, state) {
+        final extra = state.extra;
+        FriendItem? friend;
+        if (extra is FriendItem) {
+          friend = extra;
+        } else if (extra is Map<String, dynamic>) {
+          friend = FriendItem.fromJson(extra);
+        }
+        return VoiceCallScreen(friend: friend);
+      },
+    ),
+    GoRoute(
+      path: '/call/video',
+      builder: (context, state) {
+        final extra = state.extra;
+        FriendItem? friend;
+        if (extra is FriendItem) {
+          friend = extra;
+        } else if (extra is Map<String, dynamic>) {
+          friend = FriendItem.fromJson(extra);
+        }
+        return VideoCallScreen(friend: friend);
+      },
     ),
     GoRoute(
       path: '/queue',

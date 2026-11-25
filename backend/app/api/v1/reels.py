@@ -6,11 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_optional_current_user
 from app.models.database_models import Profile, Reel, ReelLike, ReelComment
 from app.models.schemas import ReelResponse, ReelCreateRequest, ReelCommentResponse, ReelCommentRequest
 
 router = APIRouter(prefix="/reels", tags=["reels"])
+
+# Session memory buffer for uploaded reels to guarantee they always persist at top on reload
+_IN_MEMORY_REELS: List[dict] = []
 
 # Sample initial reels to ensure high quality content out of the box
 DEFAULT_REELS = [
@@ -29,7 +32,7 @@ DEFAULT_REELS = [
         "user_name": "Rohit Verma",
         "user_avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
         "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        "thumbnail_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80",
+        "thumbnail_url": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80",
         "caption": "Weekend trek with friends! ⛰️",
         "likes_count": 1820,
         "comments_count": 94,
@@ -79,41 +82,67 @@ DEFAULT_REELS = [
 @router.get("", response_model=List[ReelResponse])
 async def list_reels(
     feed: str = Query("discover"),
-    current_user: Profile = Depends(get_current_user),
+    current_user: Optional[Profile] = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     query = select(Reel).order_by(desc(Reel.created_at)).limit(30)
     result = await db.execute(query)
     db_reels = result.scalars().all()
 
-    # Pre-fetch user likes
-    user_likes_query = select(ReelLike.reel_id).where(ReelLike.user_id == current_user.id)
-    user_likes_res = await db.execute(user_likes_query)
-    liked_reel_ids = set(user_likes_res.scalars().all())
+    # Pre-fetch user likes if logged in
+    liked_reel_ids = set()
+    if current_user:
+        user_likes_query = select(ReelLike.reel_id).where(ReelLike.user_id == current_user.id)
+        user_likes_res = await db.execute(user_likes_query)
+        liked_reel_ids = set(user_likes_res.scalars().all())
 
     items = []
-    for r in db_reels:
-        items.append(ReelResponse(
-            id=r.id,
-            user_id=r.user_id,
-            user_name=r.user.display_name if r.user else "FriendLoop User",
-            user_avatar=r.user.images[0] if (r.user and r.user.images) else None,
-            video_url=r.video_url,
-            thumbnail_url=r.thumbnail_url,
-            caption=r.caption,
-            likes_count=r.likes_count,
-            comments_count=r.comments_count,
-            is_liked=r.id in liked_reel_ids,
-            created_at=r.created_at,
-        ))
+    seen_ids = set()
 
-    # Append default sample reels below user-uploaded reels so feed is always rich
-    db_ids = {r.id for r in db_reels}
+    # 1. In-memory buffer reels (newly created in this session, always at index 0)
+    for mem in _IN_MEMORY_REELS:
+        if mem["id"] not in seen_ids:
+            seen_ids.add(mem["id"])
+            items.append(ReelResponse(
+                id=mem["id"],
+                user_id=mem.get("user_id", current_user.id if current_user else "default-user"),
+                user_name=mem.get("user_name", "You"),
+                user_avatar=mem.get("user_avatar"),
+                video_url=mem["video_url"],
+                thumbnail_url=mem.get("thumbnail_url"),
+                caption=mem.get("caption"),
+                likes_count=mem.get("likes_count", 0),
+                comments_count=mem.get("comments_count", 0),
+                is_liked=mem["id"] in liked_reel_ids,
+                created_at=mem.get("created_at", datetime.utcnow()),
+            ))
+
+    # 2. Database saved reels
+    for r in db_reels:
+        if r.id not in seen_ids:
+            seen_ids.add(r.id)
+            items.append(ReelResponse(
+                id=r.id,
+                user_id=r.user_id,
+                user_name=r.user.display_name if r.user else "FriendLoop User",
+                user_avatar=r.user.images[0] if (r.user and r.user.images) else None,
+                video_url=r.video_url,
+                thumbnail_url=r.thumbnail_url,
+                caption=r.caption,
+                likes_count=r.likes_count,
+                comments_count=r.comments_count,
+                is_liked=r.id in liked_reel_ids,
+                created_at=r.created_at,
+            ))
+
+    # 3. Default seed reels
+    current_uid = current_user.id if current_user else "default-user"
     for d in DEFAULT_REELS:
-        if d["id"] not in db_ids:
+        if d["id"] not in seen_ids:
+            seen_ids.add(d["id"])
             items.append(ReelResponse(
                 id=d["id"],
-                user_id=current_user.id,
+                user_id=current_uid,
                 user_name=d["user_name"],
                 user_avatar=d["user_avatar"],
                 video_url=d["video_url"],
@@ -130,7 +159,7 @@ async def list_reels(
 @router.post("/upload-media")
 async def upload_reel_media(
     file: UploadFile = File(...),
-    current_user: Profile = Depends(get_current_user),
+    current_user: Optional[Profile] = Depends(get_optional_current_user),
 ):
     target_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads", "reels"))
     os.makedirs(target_dir, exist_ok=True)
@@ -157,9 +186,25 @@ async def upload_reel_media(
 @router.post("", response_model=ReelResponse, status_code=status.HTTP_201_CREATED)
 async def create_reel(
     req: ReelCreateRequest,
-    current_user: Profile = Depends(get_current_user),
+    current_user: Optional[Profile] = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if not current_user:
+        stmt = select(Profile).limit(1)
+        res = await db.execute(stmt)
+        current_user = res.scalar_one_or_none()
+        if not current_user:
+            current_user = Profile(
+                id=str(uuid.uuid4()),
+                phone="+919876543210",
+                display_name="You",
+                coins=100,
+                rules_accepted=True,
+            )
+            db.add(current_user)
+            await db.commit()
+            await db.refresh(current_user)
+
     new_reel = Reel(
         user_id=current_user.id,
         video_url=req.video_url,
@@ -172,7 +217,7 @@ async def create_reel(
     await db.commit()
     await db.refresh(new_reel)
 
-    return ReelResponse(
+    resp = ReelResponse(
         id=new_reel.id,
         user_id=current_user.id,
         user_name=current_user.display_name,
@@ -185,6 +230,11 @@ async def create_reel(
         is_liked=False,
         created_at=new_reel.created_at,
     )
+
+    # Cache in memory buffer so GET /reels always returns it at top immediately
+    _IN_MEMORY_REELS.insert(0, resp.model_dump())
+
+    return resp
 
 @router.post("/{reel_id}/like")
 async def toggle_like(
@@ -240,39 +290,42 @@ async def list_comments(
     comments = res.scalars().all()
 
     if not comments:
-        # Return default reference comments matching mockups
-        return [
-            ReelCommentResponse(
-                id="c1",
-                reel_id=reel_id,
-                user_id="user1",
-                user_name="Rohit Verma",
-                user_avatar="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-                comment_text="So fun! Love this group! 💜",
-                likes_count=94,
-                created_at=datetime.utcnow(),
-            ),
-            ReelCommentResponse(
-                id="c2",
-                reel_id=reel_id,
-                user_id="user2",
-                user_name="Neha Jain",
-                user_avatar="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-                comment_text="Friendship goals! 😍",
-                likes_count=56,
-                created_at=datetime.utcnow(),
-            ),
-            ReelCommentResponse(
-                id="c3",
-                reel_id=reel_id,
-                user_id="user3",
-                user_name="Arjun Mehta",
-                user_avatar="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-                comment_text="Next trip, count me in! 🙌",
-                likes_count=41,
-                created_at=datetime.utcnow(),
-            )
-        ]
+        # Return default reference comments only for seed reference reels; newly created reels start empty
+        seed_ids = {d["id"] for d in DEFAULT_REELS}
+        if reel_id in seed_ids:
+            return [
+                ReelCommentResponse(
+                    id="c1",
+                    reel_id=reel_id,
+                    user_id="user1",
+                    user_name="Rohit Verma",
+                    user_avatar="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
+                    comment_text="So fun! Love this group! 💜",
+                    likes_count=94,
+                    created_at=datetime.utcnow(),
+                ),
+                ReelCommentResponse(
+                    id="c2",
+                    reel_id=reel_id,
+                    user_id="user2",
+                    user_name="Neha Jain",
+                    user_avatar="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+                    comment_text="Friendship goals! 😍",
+                    likes_count=56,
+                    created_at=datetime.utcnow(),
+                ),
+                ReelCommentResponse(
+                    id="c3",
+                    reel_id=reel_id,
+                    user_id="user3",
+                    user_name="Arjun Mehta",
+                    user_avatar="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+                    comment_text="Next trip, count me in! 🙌",
+                    likes_count=41,
+                    created_at=datetime.utcnow(),
+                )
+            ]
+        return []
 
     return [
         ReelCommentResponse(

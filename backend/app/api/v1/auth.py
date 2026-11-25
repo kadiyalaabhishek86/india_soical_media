@@ -99,6 +99,16 @@ async def setup_profile(
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found.")
 
+    # Strict 18+ validation for Google Play Restrict Minor Access compliance
+    today = date.today()
+    dob = request.date_of_birth
+    calc_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    if calc_age < 18:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="FriendLoop is strictly an 18+ platform. Minors are not permitted to register."
+        )
+
     profile.display_name = request.display_name.strip()
     profile.date_of_birth = request.date_of_birth
     profile.gender = request.gender or "Prefer not to say"
@@ -155,6 +165,14 @@ async def update_profile(
     if request.display_name is not None:
         profile.display_name = request.display_name.strip()
     if request.date_of_birth is not None:
+        today = date.today()
+        dob = request.date_of_birth
+        calc_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        if calc_age < 18:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="FriendLoop is strictly an 18+ platform. Minors are not permitted to register."
+            )
         profile.date_of_birth = request.date_of_birth
     if request.gender is not None:
         profile.gender = request.gender.strip()
@@ -304,6 +322,7 @@ async def accept_rules(user_id: str = Depends(get_current_user_id), db: AsyncSes
     profile = (await db.execute(stmt)).scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found.")
+
     profile.rules_accepted = True
     await db.commit()
     return {"success": True, "message": "Community rules accepted."}
