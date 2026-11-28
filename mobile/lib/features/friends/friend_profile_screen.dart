@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,8 @@ import '../../core/constants/api_endpoints.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/friends_provider.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/utils/coin_billing.dart';
+import '../../core/utils/nav_helper.dart';
 
 class FriendProfileScreen extends ConsumerStatefulWidget {
   final String friendshipId;
@@ -24,8 +27,11 @@ class FriendProfileScreen extends ConsumerStatefulWidget {
 class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
   final ApiClient _client = ApiClient();
   final PageController _photoPageController = PageController();
+  Timer? _autoScrollTimer;
+  Timer? _snackDismissTimer;
   int _currentPhotoIndex = 0;
   bool _isLoading = false;
+  bool _friendRequestSent = false;
 
   String _displayName = 'Ananya Reddy';
   int _age = 26;
@@ -100,15 +106,89 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
       }
     }
     _loadFriendProfile();
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || !_photoPageController.hasClients || _images.length <= 1) return;
+      final next = (_currentPhotoIndex + 1) % _images.length;
+      _photoPageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   @override
   void dispose() {
+    _autoScrollTimer?.cancel();
+    _snackDismissTimer?.cancel();
     _photoPageController.dispose();
     super.dispose();
   }
 
+  FriendItem _buildFriendExtra() {
+    return widget.initialFriend ??
+        FriendItem(
+          friendshipId: widget.friendshipId,
+          friendId: _friendId ?? '',
+          displayName: _displayName,
+          state: _state ?? 'India',
+          city: _city,
+          images: _images,
+        );
+  }
+
+  void _handleVoiceCall() {
+    final friend = _buildFriendExtra();
+    if (!CoinBilling.checkAndDeductForAction(
+      context: context,
+      ref: ref,
+      actionType: CoinActionType.voice,
+      friend: friend,
+    )) {
+      return;
+    }
+    context.push('/call', extra: friend);
+  }
+
+  void _handleVideoCall() {
+    final friend = _buildFriendExtra();
+    if (!CoinBilling.checkAndDeductForAction(
+      context: context,
+      ref: ref,
+      actionType: CoinActionType.video,
+      friend: friend,
+    )) {
+      return;
+    }
+    context.push('/call/video', extra: friend);
+  }
+
+  void _handleChat() {
+    final friend = _buildFriendExtra();
+    if (!CoinBilling.checkAndDeductForAction(
+      context: context,
+      ref: ref,
+      actionType: CoinActionType.chat,
+      friend: friend,
+      chatRouteId: widget.friendshipId,
+    )) {
+      return;
+    }
+    context.push('/chat/${widget.friendshipId}', extra: friend);
+  }
+
   Future<void> _loadFriendProfile() async {
+    if (!ApiEndpoints.isValidUuid(widget.friendshipId)) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
     try {
       final data = await _client.get(ApiEndpoints.friendProfile(widget.friendshipId));
       if (mounted) {
@@ -210,10 +290,6 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final avatarUrl = _images.isNotEmpty
-        ? _images.first
-        : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80';
-
     return Scaffold(
       backgroundColor: FriendLoopColors.canvas, // FriendLoop canvas #F4EBFC
       appBar: AppBar(
@@ -222,7 +298,7 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () => context.pop(),
+          onPressed: () => safePop(context),
         ),
         title: const Text(
           'User Profile',
@@ -438,6 +514,10 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
               ),
               const SizedBox(height: 14),
 
+              // 1b. Neat & Clean Quick Action Bar right under the profile image
+              _buildTopActionBar(),
+              const SizedBox(height: 14),
+
               // 2. Looking For Card
               _buildSectionCard(
                 title: 'Looking for',
@@ -550,120 +630,231 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
               ),
               const SizedBox(height: 4),
 
-              // 8. + Add Friend Button
+              // 8. + Add Friend Button (shows "Friend Request Sent" when clicked)
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Friend request sent to $_displayName!'),
-                        backgroundColor: FriendLoopColors.success,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 18),
-                  label: const Text(
-                    '+ Add Friend',
-                    style: TextStyle(
+                  onPressed: _friendRequestSent
+                      ? null
+                      : () {
+                          setState(() => _friendRequestSent = true);
+                          _snackDismissTimer?.cancel();
+                          ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Friend request sent to $_displayName!'),
+                              backgroundColor: FriendLoopColors.success,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                          _snackDismissTimer = Timer(const Duration(seconds: 2), () {
+                            if (mounted) {
+                              ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+                            }
+                          });
+                        },
+                  icon: Icon(
+                    _friendRequestSent ? Icons.check_circle_rounded : Icons.person_add_alt_1,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _friendRequestSent ? 'Friend Request Sent' : '+ Add Friend',
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: FriendLoopColors.violet,
+                    backgroundColor: _friendRequestSent ? FriendLoopColors.success : FriendLoopColors.violet,
+                    disabledBackgroundColor: FriendLoopColors.success,
+                    disabledForegroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              if (_friendRequestSent) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: FriendLoopColors.success.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.mark_email_read_outlined, size: 15, color: FriendLoopColors.success),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Friend request sent to $_displayName',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: FriendLoopColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-              // 9. Circular Action Buttons Row: Voice, Video, Chat
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  Widget _buildTopActionBar() {
+    final profile = ref.watch(authProvider).currentUserProfile;
+    final isPlus = profile?.isPlusSubscriber ?? false;
+    final coins = profile?.coins ?? 120;
+    final voiceCost = CoinBilling.costForAction(CoinActionType.voice, isPlus: isPlus);
+    final videoCost = CoinBilling.costForAction(CoinActionType.video, isPlus: isPlus);
+    final chatCost = CoinBilling.costForAction(CoinActionType.chat, isPlus: isPlus);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: FriendLoopColors.lavender),
+        boxShadow: [
+          BoxShadow(
+            color: FriendLoopColors.violet.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionPill(
+                  icon: Icons.mic_none_outlined,
+                  label: 'Voice',
+                  rateText: '${voiceCost}c/m',
+                  color: FriendLoopColors.violet,
+                  onTap: _handleVoiceCall,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildActionPill(
+                  icon: Icons.videocam_outlined,
+                  label: 'Video',
+                  rateText: '${videoCost}c/m',
+                  color: const Color(0xFF7B2CBF),
+                  onTap: _handleVideoCall,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildActionPill(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'Chat',
+                  rateText: '${chatCost}c',
+                  color: FriendLoopColors.plum,
+                  onTap: _handleChat,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => context.push('/wallet'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: FriendLoopColors.canvas,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildActionCircle(
-                    icon: Icons.mic_none_outlined,
-                    label: 'Voice',
-                    onTap: () {
-                      final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
-                      if (userCoins < 10) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Insufficient coins for Voice Call (10 coins required, you have $userCoins). Please recharge.'),
-                            backgroundColor: FriendLoopColors.plum,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        context.push('/wallet');
-                        return;
-                      }
-                      ref.read(authProvider.notifier).updateCoins(userCoins - 10);
-                      final f = widget.initialFriend ?? FriendItem(
-                        friendshipId: widget.friendshipId,
-                        friendId: _friendId ?? '',
-                        displayName: _displayName,
-                        state: _state ?? 'India',
-                        city: _city,
-                        images: _images,
-                      );
-                      context.push('/call', extra: f);
-                    },
+                  const Text('🪙', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$coins coins • ${CoinBilling.planLabel(isPlus)}',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: FriendLoopColors.plum,
+                    ),
                   ),
-                  _buildActionCircle(
-                    icon: Icons.videocam_outlined,
-                    label: 'Video',
-                    onTap: () {
-                      final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
-                      if (userCoins < 40) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Insufficient coins for Video Call (40 coins required, you have $userCoins). Please recharge.'),
-                            backgroundColor: FriendLoopColors.plum,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        context.push('/wallet');
-                        return;
-                      }
-                      ref.read(authProvider.notifier).updateCoins(userCoins - 40);
-                      final f = widget.initialFriend ?? FriendItem(
-                        friendshipId: widget.friendshipId,
-                        friendId: _friendId ?? '',
-                        displayName: _displayName,
-                        state: _state ?? 'India',
-                        city: _city,
-                        images: _images,
-                      );
-                      context.push('/call/video', extra: f);
-                    },
-                  ),
-                  _buildActionCircle(
-                    icon: Icons.chat_bubble_outline,
-                    label: 'Chat',
-                    onTap: () {
-                      final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
-                      if (userCoins < 5) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Insufficient coins for Chat (5 coins required, you have $userCoins). Please recharge.'),
-                            backgroundColor: FriendLoopColors.plum,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        context.push('/wallet');
-                        return;
-                      }
-                      ref.read(authProvider.notifier).updateCoins(userCoins - 5);
-                      context.push('/chat/${widget.friendshipId}', extra: widget.initialFriend);
-                    },
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Check Coins ›',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: FriendLoopColors.violet,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionPill({
+    required IconData icon,
+    required String label,
+    required String rateText,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          decoration: BoxDecoration(
+            color: FriendLoopColors.canvas,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: FriendLoopColors.lavender, width: 1.2),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color.withValues(alpha: 0.12),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: FriendLoopColors.plum,
+                ),
+              ),
+              Text(
+                rateText,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: FriendLoopColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -732,48 +923,6 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildActionCircle({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              border: Border.all(color: FriendLoopColors.lavender, width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(icon, color: FriendLoopColors.violet, size: 24),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: FriendLoopColors.plum,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

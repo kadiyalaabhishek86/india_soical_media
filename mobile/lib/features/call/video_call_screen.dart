@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/friends_provider.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/utils/coin_billing.dart';
 
 class VideoCallScreen extends ConsumerStatefulWidget {
   final FriendItem? friend;
@@ -21,6 +22,7 @@ class VideoCallScreen extends ConsumerStatefulWidget {
 class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   late Timer _durationTimer;
   int _seconds = 136; // Start at 02:16 matching mockup, then increments
+  int _elapsedInCallSeconds = 0;
   bool _isMuted = false;
   bool _isCameraOff = false;
   bool _isFrontCamera = true;
@@ -30,8 +32,28 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   void initState() {
     super.initState();
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() => _seconds++);
+      if (!mounted) return;
+      setState(() {
+        _seconds++;
+        _elapsedInCallSeconds++;
+      });
+      if (_elapsedInCallSeconds > 0 && _elapsedInCallSeconds % 60 == 0) {
+        final profile = ref.read(authProvider).currentUserProfile;
+        final coins = profile?.coins ?? 0;
+        final isPlus = profile?.isPlusSubscriber ?? false;
+        final rate = CoinBilling.costForAction(CoinActionType.video, isPlus: isPlus);
+        if (coins >= rate) {
+          ref.read(authProvider.notifier).updateCoins(coins - rate);
+        } else {
+          _durationTimer.cancel();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Coins exhausted for Video Call. Please recharge.'),
+              backgroundColor: FriendLoopColors.plum,
+            ),
+          );
+          context.pushReplacement('/wallet');
+        }
       }
     });
   }

@@ -176,7 +176,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Discover Friends'), findsOneWidget);
-    expect(find.text('Find and connect with friendly people across India'), findsOneWidget);
+    expect(find.text('Find and connect with friendly people across the whole world'), findsOneWidget);
     expect(find.text('Filters'), findsOneWidget);
 
     // Open filter bottom sheet to verify filter options
@@ -184,7 +184,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Filter Profiles'), findsOneWidget);
-    expect(find.text('All Cities'), findsOneWidget);
+    expect(find.text('All Countries'), findsOneWidget);
     expect(find.text('All Languages'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 35));
@@ -214,6 +214,8 @@ void main() {
     expect(find.text('Any language'), findsOneWidget);
 
     // Tap Find a voice match to enter searching view
+    await tester.ensureVisible(find.text('Find a voice match'));
+    await tester.pump();
     await tester.tap(find.text('Find a voice match'));
     await tester.pump();
 

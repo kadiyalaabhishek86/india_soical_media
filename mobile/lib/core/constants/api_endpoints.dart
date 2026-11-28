@@ -2,6 +2,13 @@ class ApiEndpoints {
   // Primary default Render backend URL, with --dart-define=API_BASE_URL override support
   static const String _defaultRenderUrl = 'https://india-soical-media.onrender.com';
 
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  /// Returns true only when [id] is a backend UUID (skips demo/local IDs like `user-ananya` or `room-1`).
+  static bool isValidUuid(String id) => _uuidRegex.hasMatch(id.trim());
+
   static String get rootUrl {
     const defined = String.fromEnvironment('API_BASE_URL', defaultValue: _defaultRenderUrl);
     final trimmed = defined.trim();

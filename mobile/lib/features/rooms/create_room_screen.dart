@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/rooms_provider.dart';
+import '../../core/providers/notifications_provider.dart';
+import '../../core/utils/nav_helper.dart';
 
 class CreateRoomScreen extends ConsumerStatefulWidget {
   const CreateRoomScreen({super.key});
@@ -14,9 +16,9 @@ class CreateRoomScreen extends ConsumerStatefulWidget {
 class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
   final _roomNameController = TextEditingController(text: 'Evening Hangout');
   String _selectedLanguage = 'Hindi';
-  String _roomType = 'voice'; // 'voice' or 'video'
+  final String _roomType = 'voice';
   String _access = 'public'; // 'public' or 'invite_only'
-  String _activityType = 'voice_lounge';
+  String _activityType = 'ludo';
   double _entryFee = 0;
   bool _isLoading = false;
 
@@ -32,8 +34,6 @@ class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
   ];
 
   static const List<Map<String, dynamic>> _activities = [
-    {'id': 'voice_lounge', 'title': 'Voice Lounge', 'icon': Icons.mic_none, 'desc': 'Casual conversations'},
-    {'id': 'video_stage', 'title': 'Video Stage', 'icon': Icons.videocam_outlined, 'desc': 'Face to face hangout'},
     {'id': 'ludo', 'title': 'Ludo 2v2 Arena', 'icon': Icons.casino_outlined, 'desc': '2v2 team board game'},
     {'id': 'carrom', 'title': 'Carrom Clash', 'icon': Icons.sports_esports_outlined, 'desc': 'Pocket the coins'},
     {'id': 'truth_or_dare', 'title': 'Truth or Dare', 'icon': Icons.psychology_outlined, 'desc': 'Fun party questions'},
@@ -66,8 +66,18 @@ class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
         entryFeeCoins: _entryFee.round(),
         maxSeats: _roomType == 'video' ? 6 : 12,
       );
+      ref.read(notificationsProvider.notifier).addFriendRoomOrGameNotification(
+        friendName: 'You',
+        roomTitle: room.title,
+        roomId: room.id,
+        isGame: true,
+        roomData: room.toJson(),
+      );
       if (!mounted) return;
-      context.pushReplacement('/room/${room.id}', extra: room.toJson());
+      context.pushReplacement('/room/${room.id}', extra: {
+        ...room.toJson(),
+        'is_host': true,
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -88,7 +98,7 @@ class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () => context.pop(),
+          onPressed: () => safePop(context, fallbackRoute: '/rooms'),
         ),
         title: const Text(
           'Create Room',
@@ -143,8 +153,8 @@ class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Activity Type Grid
-              const Text('Select Activity or Game', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: FriendLoopColors.plum)),
+              // Select Game Grid
+              const Text('Select Game to Play', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: FriendLoopColors.plum)),
               const SizedBox(height: 8),
               GridView.builder(
                 shrinkWrap: true,
@@ -163,7 +173,6 @@ class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
                     onTap: () {
                       setState(() {
                         _activityType = act['id'];
-                        if (act['id'] == 'video_stage') _roomType = 'video';
                       });
                     },
                     child: Container(
@@ -209,32 +218,6 @@ class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
                     ),
                   );
                 },
-              ),
-              const SizedBox(height: 16),
-
-              // Room Type (Voice vs Video)
-              const Text('Room Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: FriendLoopColors.plum)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildToggleButton(
-                      label: 'Voice',
-                      icon: Icons.mic_none,
-                      isSelected: _roomType == 'voice',
-                      onTap: () => setState(() => _roomType = 'voice'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildToggleButton(
-                      label: 'Video',
-                      icon: Icons.videocam_outlined,
-                      isSelected: _roomType == 'video',
-                      onTap: () => setState(() => _roomType = 'video'),
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 16),
 

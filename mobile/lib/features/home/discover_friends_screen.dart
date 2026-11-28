@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
@@ -6,7 +8,8 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/providers/friends_provider.dart';
 import '../../core/constants/indian_states.dart';
 import '../../core/providers/favorites_provider.dart';
-import '../../shared/widgets/demo_banner.dart';
+import '../../core/providers/notifications_provider.dart';
+import '../../core/utils/coin_billing.dart';
 
 class DiscoverFriendsScreen extends ConsumerStatefulWidget {
   const DiscoverFriendsScreen({super.key});
@@ -18,14 +21,50 @@ class DiscoverFriendsScreen extends ConsumerStatefulWidget {
 class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
   int _currentProfileIndex = 0;
   int _currentPhotoIndex = 0;
+  String? _lastUserGender;
   final PageController _photoPageController = PageController();
+  Timer? _heroAutoScrollTimer;
+  Timer? _snackDismissTimer;
 
-  String _selectedCity = 'All Cities';
+  String _selectedCountry = 'All Countries';
   String _selectedLanguage = 'All Languages';
   String _selectedLookingFor = 'All Preferences';
 
   final Set<String> _likedProfileIds = {};
   final Set<String> _favoriteProfileIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _startHeroAutoScroll();
+  }
+
+  void _startHeroAutoScroll() {
+    _heroAutoScrollTimer?.cancel();
+    _heroAutoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || !_photoPageController.hasClients) return;
+      final filtered = _getFilteredProfiles();
+      if (filtered.isEmpty) return;
+      final safeIdx = _currentProfileIndex >= filtered.length ? 0 : _currentProfileIndex;
+      final card = filtered[safeIdx];
+      final photos = (card['photos'] as List?) ?? [];
+      if (photos.length <= 1) return;
+      final nextPhoto = (_currentPhotoIndex + 1) % photos.length;
+      _photoPageController.animateToPage(
+        nextPhoto,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _heroAutoScrollTimer?.cancel();
+    _snackDismissTimer?.cancel();
+    _photoPageController.dispose();
+    super.dispose();
+  }
 
   static const List<String> lookingForOptions = [
     'All Preferences',
@@ -398,6 +437,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
       'location': 'Hyderabad',
       'state': 'Telangana',
       'city': 'Hyderabad',
+      'country': 'India',
       'languages': 'Telugu, Hindi, English',
       'bio': 'Tech consultant, badminton player, and Biryani connoisseur.',
       'lookingFor': 'Long-term relationship',
@@ -423,16 +463,133 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
       ],
       'photo': 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=800&q=80',
     },
+    {
+      'id': 'user-sophia',
+      'name': 'Sophia Miller, 25',
+      'displayName': 'Sophia Miller',
+      'age': 25,
+      'gender': 'Female',
+      'location': 'New York',
+      'state': 'New York',
+      'city': 'New York',
+      'country': 'United States',
+      'languages': 'English, Spanish',
+      'bio': 'Creative director in Manhattan who loves jazz, brunch spots, and travel.',
+      'lookingFor': 'Friendly chats',
+      'isOnline': true,
+      'distance': 'Global',
+      'height': '170 cm',
+      'orientation': 'Straight',
+      'pets': 'Dog lover 🐶',
+      'drinking': 'Socially 🍷',
+      'smoking': 'Non-smoker 🚭',
+      'workouts': 'Pilates & Running 💪',
+      'socialMedia': 'Active on Instagram 📱',
+      'zodiac': 'Libra ♎',
+      'education': 'BFA Design 🎓',
+      'familyPlan': 'Open to kids',
+      'communicationStyle': 'Voice & video calls 💬',
+      'loveStyle': 'Quality time 💜',
+      'interests': ['Jazz 🎷', 'Art galleries 🖼️', 'Travel ✈️'],
+      'photos': [
+        'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80',
+      ],
+      'photo': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
+    },
+    {
+      'id': 'user-liam',
+      'name': 'Liam Wilson, 28',
+      'displayName': 'Liam Wilson',
+      'age': 28,
+      'gender': 'Male',
+      'location': 'London',
+      'state': 'England',
+      'city': 'London',
+      'country': 'United Kingdom',
+      'languages': 'English, French',
+      'bio': 'Fintech product lead, Premier League fan, and weekend hiker.',
+      'lookingFor': 'Networking',
+      'isOnline': true,
+      'distance': 'Global',
+      'height': '181 cm',
+      'orientation': 'Straight',
+      'pets': 'Cat lover 🐱',
+      'drinking': 'Socially 🍷',
+      'smoking': 'Non-smoker 🚭',
+      'workouts': 'Running & Football ⚽',
+      'socialMedia': 'Active on Instagram 📱',
+      'zodiac': 'Leo ♌',
+      'education': 'M.Sc Finance 🎓',
+      'familyPlan': 'Wants children 👶',
+      'communicationStyle': 'Calls & deep chats 💬',
+      'loveStyle': 'Quality time 💜',
+      'interests': ['Football ⚽', 'Coffee ☕', 'Photography 📷'],
+      'photos': [
+        'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=800&q=80',
+      ],
+      'photo': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80',
+    },
+    {
+      'id': 'user-yuna',
+      'name': 'Yuna Tanaka, 24',
+      'displayName': 'Yuna Tanaka',
+      'age': 24,
+      'gender': 'Female',
+      'location': 'Tokyo',
+      'state': 'Tokyo',
+      'city': 'Tokyo',
+      'country': 'Japan',
+      'languages': 'Japanese, English',
+      'bio': 'UI animator, ramen explorer, and language exchange enthusiast.',
+      'lookingFor': 'Casual hangouts',
+      'isOnline': true,
+      'distance': 'Global',
+      'height': '163 cm',
+      'orientation': 'Straight',
+      'pets': 'Cat lover 🐱',
+      'drinking': 'Socially 🍷',
+      'smoking': 'Non-smoker 🚭',
+      'workouts': 'Cycling 🚴',
+      'socialMedia': 'Active on Instagram 📱',
+      'zodiac': 'Aquarius ♒',
+      'education': 'Tokyo Arts Univ 🎓',
+      'familyPlan': 'Open',
+      'communicationStyle': 'Big texter 💬',
+      'loveStyle': 'Words of affirmation 💜',
+      'interests': ['Animation 🎨', 'Ramen 🍜', 'Music 🎵'],
+      'photos': [
+        'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80',
+      ],
+      'photo': 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=800&q=80',
+    },
   ];
 
   List<Map<String, dynamic>> _getFilteredProfiles() {
+    final myGender = (ref.read(authProvider).currentUserProfile?.gender ?? '').trim().toLowerCase();
+    final bool showOnlyFemale = myGender == 'male' || myGender == 'boy' || myGender == 'man';
+    final bool showOnlyMale = myGender == 'female' || myGender == 'girl' || myGender == 'woman';
+
     return _allProfiles.where((p) {
-      // 1. City check
-      if (_selectedCity != 'All Cities') {
-        final loc = (p['location'] as String).toLowerCase();
-        final city = (p['city'] as String? ?? '').toLowerCase();
-        final target = _selectedCity.toLowerCase();
-        if (!loc.contains(target) && !city.contains(target)) {
+      // 0. Opposite-gender filter for Discover Hero Section
+      final pGender = (p['gender'] as String? ?? '').trim().toLowerCase();
+      if (showOnlyFemale && pGender != 'female') {
+        return false;
+      }
+      if (showOnlyMale && pGender != 'male') {
+        return false;
+      }
+
+      // 1. Country check (worldwide)
+      if (_selectedCountry != 'All Countries') {
+        final country = (p['country'] as String? ?? 'India').toLowerCase();
+        final target = _selectedCountry.toLowerCase();
+        if (!country.contains(target)) {
           return false;
         }
       }
@@ -457,26 +614,52 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
     }).toList();
   }
 
+  void _showAutoDismissSnackBar(SnackBar snackBar) {
+    _snackDismissTimer?.cancel();
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(snackBar);
+    _snackDismissTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+      }
+    });
+  }
+
   void _onPass(int totalProfiles) {
     if (totalProfiles == 0) return;
     setState(() {
       _currentProfileIndex = (_currentProfileIndex + 1) % totalProfiles;
       _currentPhotoIndex = 0;
     });
+    if (_photoPageController.hasClients) {
+      _photoPageController.jumpToPage(0);
+    }
   }
 
   void _onLike(Map<String, dynamic> profile, int totalProfiles) {
     final id = profile['id'] as String;
     setState(() {
       _likedProfileIds.add(id);
+      _favoriteProfileIds.add(id);
       _currentProfileIndex = (_currentProfileIndex + 1) % totalProfiles;
       _currentPhotoIndex = 0;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    if (_photoPageController.hasClients) {
+      _photoPageController.jumpToPage(0);
+    }
+    // Clicking the love symbol also adds the person to Favorites & triggers profile like alert
+    ref.read(favoritesProvider.notifier).addFavorite(profile);
+    ref.read(notificationsProvider.notifier).addProfileLike(
+      fromName: profile['displayName']?.toString() ?? 'Someone',
+      avatar: profile['photo']?.toString(),
+      isStranger: true,
+    );
+    _showAutoDismissSnackBar(
       SnackBar(
-        content: Text('You liked ${profile['displayName']}! 💜'),
+        content: Text('Liked ${profile['displayName']} & added to Favorites! 💜'),
         backgroundColor: FriendLoopColors.plum,
-        duration: const Duration(seconds: 2),
+        duration: const Duration(milliseconds: 1400),
       ),
     );
   }
@@ -496,8 +679,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
 
     ref.read(favoritesProvider.notifier).toggleFavorite(profile);
 
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showAutoDismissSnackBar(
       SnackBar(
         content: Text(
           !isFav
@@ -514,6 +696,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
           label: 'Undo',
           textColor: FriendLoopColors.gold,
           onPressed: () {
+            _snackDismissTimer?.cancel();
             setState(() {
               if (!isFav) {
                 _favoriteProfileIds.remove(id);
@@ -522,6 +705,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
               }
             });
             ref.read(favoritesProvider.notifier).toggleFavorite(profile);
+            ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
           },
         ),
       ),
@@ -567,49 +751,44 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
   }
 
   void _onChat(Map<String, dynamic> card) {
-    final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
-    if (userCoins < 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Insufficient coins for Chat (5 coins required, you have $userCoins). Please recharge.'),
-          backgroundColor: FriendLoopColors.plum,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      context.push('/wallet');
-      return;
-    }
-    ref.read(authProvider.notifier).updateCoins(userCoins - 5);
-
     final List<String> photosList = (card['photos'] as List?)?.map((e) => e.toString()).toList() ??
         [card['photo']?.toString() ?? 'assets/telegram/wallpaper_sample.png'];
 
-    context.push(
-      '/chat/${card['id']}',
-      extra: FriendItem(
-        friendshipId: card['id'],
-        friendId: card['id'],
-        displayName: card['displayName'] ?? card['name'],
-        avatarUrl: card['photo'],
-        city: card['city'] ?? card['location'],
-        state: card['state'] ?? 'India',
-        age: card['age'] ?? 25,
-        gender: card['gender'] ?? 'Female',
-        bio: card['bio'],
-        lookingFor: card['lookingFor'],
-        languages: card['languages'],
-        images: photosList,
-      ),
+    final friend = FriendItem(
+      friendshipId: card['id'],
+      friendId: card['id'],
+      displayName: card['displayName'] ?? card['name'],
+      avatarUrl: card['photo'],
+      city: card['city'] ?? card['location'],
+      state: card['country'] ?? card['state'] ?? 'India',
+      age: card['age'] ?? 25,
+      gender: card['gender'] ?? 'Female',
+      bio: card['bio'],
+      lookingFor: card['lookingFor'],
+      languages: card['languages'],
+      images: photosList,
     );
+
+    if (!CoinBilling.checkAndDeductForAction(
+      context: context,
+      ref: ref,
+      actionType: CoinActionType.chat,
+      friend: friend,
+      chatRouteId: card['id'],
+    )) {
+      return;
+    }
+
+    context.push('/chat/${card['id']}', extra: friend);
   }
 
   void _openFilterBottomSheet() {
-    String tempCity = _selectedCity;
+    String tempCountry = _selectedCountry;
     String tempLanguage = _selectedLanguage;
     String tempLookingFor = _selectedLookingFor;
 
-    final cityOptions = ['All Cities', ...IndianData.allCities];
-    final langOptions = ['All Languages', ...IndianData.allLanguages];
+    final countryOptions = ['All Countries', ...IndianData.allCountries];
+    final langOptions = ['All Languages', ...IndianData.worldLanguages];
 
     showModalBottomSheet(
       context: context,
@@ -667,9 +846,9 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // 1. Location Filter
+                    // 1. Country Filter (Global)
                     const Text(
-                      'Location',
+                      'Country',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -686,7 +865,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: tempCity,
+                          value: tempCountry,
                           isExpanded: true,
                           dropdownColor: Colors.white,
                           icon: const Icon(Icons.keyboard_arrow_down_rounded, color: FriendLoopColors.violet),
@@ -696,7 +875,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                           menuMaxHeight: 320,
-                          items: cityOptions
+                          items: countryOptions
                               .map((c) => DropdownMenuItem(
                                     value: c,
                                     child: Text(
@@ -711,7 +890,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                               .toList(),
                           onChanged: (val) {
                             if (val != null) {
-                              setSheetState(() => tempCity = val);
+                              setSheetState(() => tempCountry = val);
                             }
                           },
                         ),
@@ -831,7 +1010,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                             ),
                             onPressed: () {
                               setSheetState(() {
-                                tempCity = 'All Cities';
+                                tempCountry = 'All Countries';
                                 tempLanguage = 'All Languages';
                                 tempLookingFor = 'All Preferences';
                               });
@@ -851,12 +1030,15 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                             ),
                             onPressed: () {
                               setState(() {
-                                _selectedCity = tempCity;
+                                _selectedCountry = tempCountry;
                                 _selectedLanguage = tempLanguage;
                                 _selectedLookingFor = tempLookingFor;
                                 _currentProfileIndex = 0;
                                 _currentPhotoIndex = 0;
                               });
+                              if (_photoPageController.hasClients) {
+                                _photoPageController.jumpToPage(0);
+                              }
                               Navigator.pop(context);
                             },
                             child: const Text(
@@ -881,6 +1063,12 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).currentUserProfile;
     final coins = user?.coins ?? 120;
+    final currentGender = (user?.gender ?? '').trim().toLowerCase();
+    if (_lastUserGender != null && _lastUserGender != currentGender) {
+      _currentProfileIndex = 0;
+      _currentPhotoIndex = 0;
+    }
+    _lastUserGender = currentGender;
     final filteredProfiles = _getFilteredProfiles();
 
     if (_currentProfileIndex >= filteredProfiles.length && filteredProfiles.isNotEmpty) {
@@ -893,16 +1081,22 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
             [currentCard['photo']?.toString() ?? 'assets/telegram/wallpaper_sample.png'])
         : [];
 
-    return Scaffold(
-      backgroundColor: FriendLoopColors.canvas, // Light canvas palette (#F4EBFC)
-      body: SafeArea(
-        child: Column(
-          children: [
-            const DemoModeBanner(),
-
-            // Top Header Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 8.0),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: FriendLoopColors.canvas, // Light canvas palette (#F4EBFC)
+        body: SafeArea(
+          top: true,
+          bottom: false,
+          child: Column(
+            children: [
+              // Top Header Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -948,14 +1142,14 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: (_selectedCity != 'All Cities' ||
+                            color: (_selectedCountry != 'All Countries' ||
                                     _selectedLanguage != 'All Languages' ||
                                     _selectedLookingFor != 'All Preferences')
                                 ? FriendLoopColors.lavender
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: (_selectedCity != 'All Cities' ||
+                              color: (_selectedCountry != 'All Countries' ||
                                       _selectedLanguage != 'All Languages' ||
                                       _selectedLookingFor != 'All Preferences')
                                   ? FriendLoopColors.violet
@@ -973,7 +1167,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                             children: [
                               Icon(
                                 Icons.tune_rounded,
-                                color: (_selectedCity != 'All Cities' ||
+                                color: (_selectedCountry != 'All Countries' ||
                                         _selectedLanguage != 'All Languages' ||
                                         _selectedLookingFor != 'All Preferences')
                                     ? FriendLoopColors.violet
@@ -984,7 +1178,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                               Text(
                                 'Filters',
                                 style: TextStyle(
-                                  color: (_selectedCity != 'All Cities' ||
+                                  color: (_selectedCountry != 'All Countries' ||
                                           _selectedLanguage != 'All Languages' ||
                                           _selectedLookingFor != 'All Preferences')
                                       ? FriendLoopColors.violet
@@ -1038,29 +1232,99 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
               ),
             ),
 
-            // Subtitle & Active Filter Chips (Removable Chips)
+            // Subtitle, Random Calls button & Active Filter Chips (neat & stylish)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Discover Friends',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: FriendLoopColors.plum,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.88),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: FriendLoopColors.lavender),
+                      boxShadow: [
+                        BoxShadow(
+                          color: FriendLoopColors.violet.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Discover Friends',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: FriendLoopColors.plum,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Find and connect with friendly people across the whole world',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: FriendLoopColors.textSecondary,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => context.push('/random-connect'),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Ink(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [FriendLoopColors.violet, Color(0xFF9D4EDD)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: FriendLoopColors.violet.withValues(alpha: 0.28),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.shuffle_rounded, color: Colors.white, size: 15),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'Random',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Find and connect with friendly people across India',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: FriendLoopColors.textSecondary,
-                    ),
-                  ),
-                  if (_selectedCity != 'All Cities' ||
+                  if (_selectedCountry != 'All Countries' ||
                       _selectedLanguage != 'All Languages' ||
                       _selectedLookingFor != 'All Preferences') ...[
                     const SizedBox(height: 8),
@@ -1068,10 +1332,10 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          if (_selectedCity != 'All Cities') ...[
+                          if (_selectedCountry != 'All Countries') ...[
                             _buildFilterChip(
-                              label: _selectedCity,
-                              onClear: () => setState(() => _selectedCity = 'All Cities'),
+                              label: _selectedCountry,
+                              onClear: () => setState(() => _selectedCountry = 'All Countries'),
                               onTap: _openFilterBottomSheet,
                             ),
                             const SizedBox(width: 8),
@@ -1099,31 +1363,26 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
               ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
-            // Profile Card View or Empty State
+            // Profile Card View (full-width edge-to-edge on sides) or Empty State
             Expanded(
               child: currentCard != null
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: FriendLoopColors.border),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
+                  ? Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
                               // 1. Multi-photo Horizontal Swiper
                               GestureDetector(
                                 onTap: () => _openProfileDetails(currentCard),
@@ -1302,7 +1561,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                                               color: Colors.white, size: 14),
                                           const SizedBox(width: 4),
                                           Text(
-                                            '${currentCard['city'] ?? currentCard['location']}, ${currentCard['state']}',
+                                            '${currentCard['city'] ?? currentCard['location']}, ${currentCard['country'] ?? currentCard['state']}',
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 13,
@@ -1362,9 +1621,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                               ),
                             ],
                           ),
-                        ),
-                      ),
-                    )
+                        )
                   : Center(
                       child: Container(
                         margin: const EdgeInsets.all(24),
@@ -1397,7 +1654,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                             ),
                             const SizedBox(height: 6),
                             const Text(
-                              'Try resetting filters or exploring other Indian cities to discover more people.',
+                              'Try resetting filters or exploring other countries to discover more people.',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: FriendLoopColors.textMuted, fontSize: 13),
                             ),
@@ -1414,7 +1671,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                                   style: TextStyle(fontWeight: FontWeight.bold)),
                               onPressed: () {
                                 setState(() {
-                                  _selectedCity = 'All Cities';
+                                  _selectedCountry = 'All Countries';
                                   _selectedLanguage = 'All Languages';
                                   _selectedLookingFor = 'All Preferences';
                                   _currentProfileIndex = 0;
@@ -1430,10 +1687,10 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
 
             const SizedBox(height: 12),
 
-            // Four Profile Actions: Pass, Like, Favorite, Chat
+            // Four Profile Actions: Pass, Like, Favorite, Chat (vibrant attractive dock for girls & boys)
             if (currentCard != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -1441,23 +1698,22 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                     _buildActionButton(
                       label: 'Pass',
                       icon: Icons.close_rounded,
-                      iconColor: FriendLoopColors.textMuted,
+                      gradientColors: const [Colors.white, Color(0xFFF3F0F8)],
+                      iconColor: const Color(0xFF64748B),
                       borderColor: FriendLoopColors.border,
+                      glowColor: Colors.black12,
                       onTap: () => _onPass(filteredProfiles.length),
                     ),
 
                     // 2. Like
                     _buildActionButton(
                       label: 'Like',
-                      icon: _likedProfileIds.contains(currentCard['id'])
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      iconColor: _likedProfileIds.contains(currentCard['id'])
-                          ? FriendLoopColors.rose
-                          : const Color(0xFFE53935),
-                      borderColor: _likedProfileIds.contains(currentCard['id'])
-                          ? FriendLoopColors.rose
-                          : FriendLoopColors.border,
+                      icon: Icons.favorite_rounded,
+                      gradientColors: const [Color(0xFFFF4D79), Color(0xFFE91E63)],
+                      iconColor: Colors.white,
+                      borderColor: Colors.transparent,
+                      glowColor: const Color(0xFFE91E63).withValues(alpha: 0.36),
+                      isPrimary: true,
                       onTap: () => _onLike(currentCard, filteredProfiles.length),
                     ),
 
@@ -1468,20 +1724,28 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
                               ref.watch(favoritesProvider).any((f) => f.id == currentCard['id']))
                           ? Icons.star_rounded
                           : Icons.star_outline_rounded,
-                      iconColor: FriendLoopColors.gold,
-                      borderColor: (_favoriteProfileIds.contains(currentCard['id']) ||
+                      gradientColors: (_favoriteProfileIds.contains(currentCard['id']) ||
                               ref.watch(favoritesProvider).any((f) => f.id == currentCard['id']))
-                          ? FriendLoopColors.gold
-                          : FriendLoopColors.border,
+                          ? const [Color(0xFFFFCA28), Color(0xFFFF8F00)]
+                          : const [Color(0xFFFFFBF0), Color(0xFFFFF3C4)],
+                      iconColor: (_favoriteProfileIds.contains(currentCard['id']) ||
+                              ref.watch(favoritesProvider).any((f) => f.id == currentCard['id']))
+                          ? Colors.white
+                          : const Color(0xFFD97706),
+                      borderColor: FriendLoopColors.gold.withValues(alpha: 0.65),
+                      glowColor: FriendLoopColors.gold.withValues(alpha: 0.28),
                       onTap: () => _onToggleFavorite(currentCard),
                     ),
 
                     // 4. Chat
                     _buildActionButton(
                       label: 'Chat',
-                      icon: Icons.chat_bubble_outline_rounded,
-                      iconColor: FriendLoopColors.violet,
-                      borderColor: FriendLoopColors.lavender,
+                      icon: Icons.chat_bubble_rounded,
+                      gradientColors: const [FriendLoopColors.violet, Color(0xFF9D4EDD)],
+                      iconColor: Colors.white,
+                      borderColor: Colors.transparent,
+                      glowColor: FriendLoopColors.violet.withValues(alpha: 0.34),
+                      isPrimary: true,
                       onTap: () => _onChat(currentCard),
                     ),
                   ],
@@ -1490,6 +1754,7 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
 
             const SizedBox(height: 6),
           ],
+        ),
         ),
       ),
     );
@@ -1547,42 +1812,60 @@ class _DiscoverFriendsScreenState extends ConsumerState<DiscoverFriendsScreen> {
   Widget _buildActionButton({
     required String label,
     required IconData icon,
+    required List<Color> gradientColors,
     required Color iconColor,
     required Color borderColor,
+    required Color glowColor,
     required VoidCallback onTap,
+    bool isPrimary = false,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: borderColor, width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+    final double size = isPrimary ? 58 : 54;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: gradientColors,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: borderColor == Colors.transparent ? Colors.white.withValues(alpha: 0.35) : borderColor,
+                    width: 1.4,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: glowColor,
+                      blurRadius: isPrimary ? 14 : 9,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(icon, color: iconColor, size: 24),
+                child: Icon(icon, color: iconColor, size: isPrimary ? 27 : 24),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  color: FriendLoopColors.plum,
+                  fontSize: 11.5,
+                  fontWeight: isPrimary ? FontWeight.w800 : FontWeight.w700,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              color: FriendLoopColors.plum,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

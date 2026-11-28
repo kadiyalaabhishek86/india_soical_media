@@ -65,46 +65,57 @@ class FavoritesNotifier extends StateNotifier<List<FavoriteProfile>> {
 
   bool isFavorite(String id) => state.any((p) => p.id == id);
 
+  FavoriteProfile _fromMap(Map<String, dynamic> p) {
+    final id = p['id'] as String;
+    final List<String> photos = (p['photos'] as List?)?.map((e) => e.toString()).toList() ??
+        [p['photo']?.toString() ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'];
+    final List<String> interests = (p['interests'] as List?)?.map((e) => e.toString()).toList() ??
+        ['Long walks with photography 📷', 'Biryani 🍛', 'Harry Potter ⚡'];
+
+    return FavoriteProfile(
+      id: id,
+      name: p['name'] ?? p['displayName'] ?? 'Friend',
+      displayName: p['displayName'] ?? p['name'] ?? 'Friend',
+      age: p['age'] ?? 25,
+      location: p['location'] ?? 'Bengaluru',
+      city: p['city'] ?? p['location'] ?? 'Bengaluru',
+      state: p['country'] ?? p['state'] ?? 'India',
+      photo: p['photo'] ?? (photos.isNotEmpty ? photos.first : ''),
+      photos: photos,
+      lookingFor: p['lookingFor'] ?? 'Long-term relationship',
+      isOnline: p['isOnline'] ?? true,
+      bio: p['bio'],
+      languages: p['languages'],
+      distance: p['distance'] ?? '84 miles away',
+      height: p['height'] ?? '168 cm',
+      orientation: p['orientation'] ?? 'Straight',
+      pets: p['pets'] ?? 'Dog lover 🐶',
+      drinking: p['drinking'] ?? 'Socially 🍷',
+      smoking: p['smoking'] ?? 'Non-smoker 🚭',
+      workouts: p['workouts'] ?? 'Regular workouts 💪',
+      socialMedia: p['socialMedia'] ?? 'Active on Instagram 📱',
+      zodiac: p['zodiac'] ?? 'Scorpio ♏',
+      education: p['education'] ?? 'Masters Graduate 🎓',
+      familyPlan: p['familyPlan'] ?? 'Wants children 👶',
+      communicationStyle: p['communicationStyle'] ?? 'Big texter & calls 💬',
+      loveStyle: p['loveStyle'] ?? 'Quality time & affirmations 💜',
+      interests: interests,
+    );
+  }
+
+  void addFavorite(Map<String, dynamic> p) {
+    final id = p['id'] as String;
+    if (!isFavorite(id)) {
+      state = [_fromMap(p), ...state];
+    }
+  }
+
   void toggleFavorite(Map<String, dynamic> p) {
     final id = p['id'] as String;
     if (isFavorite(id)) {
       state = state.where((item) => item.id != id).toList();
     } else {
-      final List<String> photos = (p['photos'] as List?)?.map((e) => e.toString()).toList() ??
-          [p['photo']?.toString() ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'];
-      final List<String> interests = (p['interests'] as List?)?.map((e) => e.toString()).toList() ??
-          ['Long walks with photography 📷', 'Biryani 🍛', 'Harry Potter ⚡'];
-
-      final fav = FavoriteProfile(
-        id: id,
-        name: p['name'] ?? p['displayName'] ?? 'Friend',
-        displayName: p['displayName'] ?? p['name'] ?? 'Friend',
-        age: p['age'] ?? 25,
-        location: p['location'] ?? 'Bengaluru',
-        city: p['city'] ?? p['location'] ?? 'Bengaluru',
-        state: p['state'] ?? 'Karnataka',
-        photo: p['photo'] ?? (photos.isNotEmpty ? photos.first : ''),
-        photos: photos,
-        lookingFor: p['lookingFor'] ?? 'Long-term relationship',
-        isOnline: p['isOnline'] ?? true,
-        bio: p['bio'],
-        languages: p['languages'],
-        distance: p['distance'] ?? '84 miles away',
-        height: p['height'] ?? '168 cm',
-        orientation: p['orientation'] ?? 'Straight',
-        pets: p['pets'] ?? 'Dog lover 🐶',
-        drinking: p['drinking'] ?? 'Socially 🍷',
-        smoking: p['smoking'] ?? 'Non-smoker 🚭',
-        workouts: p['workouts'] ?? 'Regular workouts 💪',
-        socialMedia: p['socialMedia'] ?? 'Active on Instagram 📱',
-        zodiac: p['zodiac'] ?? 'Scorpio ♏',
-        education: p['education'] ?? 'Masters Graduate 🎓',
-        familyPlan: p['familyPlan'] ?? 'Wants children 👶',
-        communicationStyle: p['communicationStyle'] ?? 'Big texter & calls 💬',
-        loveStyle: p['loveStyle'] ?? 'Quality time & affirmations 💜',
-        interests: interests,
-      );
-      state = [fav, ...state];
+      state = [_fromMap(p), ...state];
     }
   }
 

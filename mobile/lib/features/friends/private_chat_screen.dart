@@ -10,6 +10,7 @@ import '../../core/providers/chats_inbox_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/theme/colors.dart';
+import '../../core/utils/coin_billing.dart';
 
 class PrivateChatScreen extends ConsumerStatefulWidget {
   final String friendshipId;
@@ -298,34 +299,25 @@ class _PrivateChatScreenState extends ConsumerState<PrivateChatScreen> {
                       ),
                       onPressed: () {
                         Navigator.pop(modalContext);
-                        final userCoins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
                         if (selectedMode == 'video') {
-                          if (userCoins < 40) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Insufficient coins for Video Call (40 coins required, you have $userCoins). Please recharge.'),
-                                backgroundColor: FriendLoopColors.plum,
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                            context.push('/wallet');
+                          if (!CoinBilling.checkAndDeductForAction(
+                            context: context,
+                            ref: ref,
+                            actionType: CoinActionType.video,
+                            friend: friend,
+                          )) {
                             return;
                           }
-                          ref.read(authProvider.notifier).updateCoins(userCoins - 40);
                           context.push('/call/video', extra: friend);
                         } else {
-                          if (userCoins < 10) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Insufficient coins for Voice Call (10 coins required, you have $userCoins). Please recharge.'),
-                                backgroundColor: FriendLoopColors.plum,
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                            context.push('/wallet');
+                          if (!CoinBilling.checkAndDeductForAction(
+                            context: context,
+                            ref: ref,
+                            actionType: CoinActionType.voice,
+                            friend: friend,
+                          )) {
                             return;
                           }
-                          ref.read(authProvider.notifier).updateCoins(userCoins - 10);
                           context.push('/call', extra: friend);
                         }
                       },

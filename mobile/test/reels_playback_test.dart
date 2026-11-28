@@ -64,9 +64,11 @@ void main() {
       );
       await tester.pump();
 
-      // Verify header tabs
+      // Verify header tabs (Discover & Friends Reels, no refresh or notification buttons)
       expect(find.text('Discover'), findsOneWidget);
-      expect(find.text('Following'), findsOneWidget);
+      expect(find.text('Friends Reels'), findsOneWidget);
+      expect(find.byIcon(Icons.notifications_none), findsNothing);
+      expect(find.byIcon(Icons.refresh_rounded), findsNothing);
 
       // Verify initial reel content
       expect(find.text('Priya Patel'), findsOneWidget);

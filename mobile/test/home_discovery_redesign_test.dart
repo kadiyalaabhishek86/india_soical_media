@@ -65,6 +65,7 @@ void main() {
       expect(find.text('Filters'), findsOneWidget);
       expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
       expect(find.text('Discover Friends'), findsOneWidget);
+      expect(find.text('Random'), findsOneWidget);
       expect(find.text('120'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 15));
@@ -154,9 +155,9 @@ void main() {
       await tester.tap(find.text('Filters'));
       await tester.pumpAndSettle();
 
-      // Verify bottom sheet title and sections
+      // Verify bottom sheet title and sections (worldwide Country, Language, Looking for)
       expect(find.text('Filter Profiles'), findsOneWidget);
-      expect(find.text('Location'), findsOneWidget);
+      expect(find.text('Country'), findsOneWidget);
       expect(find.text('Language'), findsOneWidget);
       expect(find.text('Looking for'), findsWidgets);
       expect(find.text('Long-term relationship'), findsWidgets);

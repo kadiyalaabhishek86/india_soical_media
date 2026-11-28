@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/friends_provider.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/utils/coin_billing.dart';
+import '../../core/utils/nav_helper.dart';
 
 class FriendsListScreen extends ConsumerStatefulWidget {
   const FriendsListScreen({super.key});
@@ -16,6 +18,7 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchOpen = false;
   String _searchQuery = '';
+  int _selectedTab = 0; // 0 = All, 1 = Online, 2 = Unread
 
   @override
   void initState() {
@@ -40,12 +43,10 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
     final currentUserId = currentUser?.id ?? '';
     final currentUserName = (currentUser?.displayName ?? '').toLowerCase().trim();
 
-    // Filter items: isolate per-user data and exclude technical/broadcast channels
     final displayedFriends = friendsState.friends.where((f) {
       if (currentUserId.isNotEmpty && f.friendId == currentUserId) return false;
       if (currentUserName.isNotEmpty && f.displayName.toLowerCase().trim() == currentUserName) return false;
-      
-      // Exclude legacy technical channels, jobs, or bots
+
       final name = f.displayName.toLowerCase();
       if (name.contains('technical') ||
           name.contains('walkin') ||
@@ -58,26 +59,26 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
         return false;
       }
 
+      if (_selectedTab == 1 && (f.statusText ?? 'online').toLowerCase() != 'online') {
+        return false;
+      }
+      if (_selectedTab == 2 && f.unreadCount <= 0) {
+        return false;
+      }
+
       if (_searchQuery.isEmpty) return true;
       final city = (f.city ?? '').toLowerCase();
       return name.contains(_searchQuery) || city.contains(_searchQuery);
     }).toList();
 
     return Scaffold(
-      backgroundColor: FriendLoopColors.canvas, // FriendLoop canvas #F4EBFC
+      backgroundColor: FriendLoopColors.canvas,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              context.pop();
-            } else {
-              context.go('/');
-            }
-          },
+          onPressed: () => safePop(context),
         ),
         title: _isSearchOpen
             ? Container(
@@ -100,14 +101,17 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
                   ),
                 ),
               )
-            : const Text(
-                'Friends',
-                style: TextStyle(
-                  color: FriendLoopColors.plum,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
+            : Image.asset(
+                'assets/images/friendloop_logo.png',
+                height: 28,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.all_inclusive_rounded,
+                  size: 28,
+                  color: FriendLoopColors.violet,
                 ),
               ),
+        centerTitle: true,
         actions: [
           IconButton(
             icon: Icon(
@@ -126,70 +130,54 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
         ],
       ),
       body: SafeArea(
-        child: RefreshIndicator(
-          color: FriendLoopColors.violet,
-          onRefresh: () => ref.read(friendsProvider.notifier).fetchFriends(),
-          child: displayedFriends.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: displayedFriends.length,
-                  itemBuilder: (context, index) {
-                    final friend = displayedFriends[index];
-                    return _buildFriendCard(context, friend);
-                  },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Screen Title: Friends (matching Recent Calls layout)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+              child: Text(
+                'Friends',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 26,
+                  color: FriendLoopColors.plum,
                 ),
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: FriendLoopColors.border.withValues(alpha: 0.7))),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+              ),
             ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: 0,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: FriendLoopColors.violet,
-          unselectedItemColor: FriendLoopColors.plum.withValues(alpha: 0.6),
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          onTap: (index) {
-            if (index == 0) context.go('/');
-            if (index == 1) context.go('/reels');
-            if (index == 2) context.go('/rooms');
-            if (index == 3) context.go('/chats');
-            if (index == 4) context.go('/profile');
-          },
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded),
-              label: 'Home',
+            const SizedBox(height: 4),
+
+            // Tabs row (matching Recent Calls)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Row(
+                children: [
+                  _buildTab('All', 0),
+                  const SizedBox(width: 8),
+                  _buildTab('Online', 1),
+                  const SizedBox(width: 8),
+                  _buildTab('Unread', 2),
+                ],
+              ),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.smart_display_outlined),
-              label: 'Reels',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.groups_outlined),
-              label: 'Rooms',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline),
-              label: 'Chats',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              label: 'Profile',
+            const SizedBox(height: 4),
+
+            Expanded(
+              child: RefreshIndicator(
+                color: FriendLoopColors.violet,
+                onRefresh: () => ref.read(friendsProvider.notifier).fetchFriends(),
+                child: displayedFriends.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemCount: displayedFriends.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, indent: 64, color: FriendLoopColors.border),
+                        itemBuilder: (context, index) {
+                          final friend = displayedFriends[index];
+                          return _buildFriendRow(context, friend);
+                        },
+                      ),
+              ),
             ),
           ],
         ),
@@ -197,48 +185,53 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
     );
   }
 
-  // Matching Screen 5: Friend Card with rounded avatar, Name, Online status, and 📞 📹 💬 actions
-  Widget _buildFriendCard(BuildContext context, FriendItem friend) {
+  Widget _buildTab(String label, int index) {
+    final isSelected = _selectedTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedTab = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? FriendLoopColors.violet : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? FriendLoopColors.violet : FriendLoopColors.border),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+              color: isSelected ? Colors.white : FriendLoopColors.plum,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFriendRow(BuildContext context, FriendItem friend) {
     final avatarUrl = friend.images.isNotEmpty
         ? friend.images.first
         : (friend.localAssetImage ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80');
+    final isOnline = (friend.statusText ?? 'online').toLowerCase() == 'online';
+    final location = (friend.city != null && friend.city!.isNotEmpty) ? friend.city! : friend.state;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF0E5FA), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () {
-          context.push('/friend-profile/${friend.friendshipId}', extra: friend);
-        },
-        child: Row(
-          children: [
-            // Rounded square photo (matching Screen 5)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      onTap: () => context.push('/friend-profile/${friend.friendshipId}', extra: friend),
+      leading: Stack(
+        children: [
+          ClipOval(
+            child: SizedBox(
+              width: 44,
+              height: 44,
               child: Image.network(
                 avatarUrl,
-                width: 50,
-                height: 50,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: FriendLoopColors.lavender,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  color: FriendLoopColors.lavender,
                   child: Center(
                     child: Text(
                       friend.displayName.isNotEmpty ? friend.displayName[0] : 'F',
@@ -248,100 +241,111 @@ class _FriendsListScreenState extends ConsumerState<FriendsListScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 14),
-
-            // Friend Name & Online Status (matching Screen 5)
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    friend.displayName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      color: FriendLoopColors.plum,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: FriendLoopColors.onlineGreen,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'Online',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: FriendLoopColors.plum,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+          ),
+          if (isOnline)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 11,
+                height: 11,
+                decoration: BoxDecoration(
+                  color: FriendLoopColors.onlineGreen,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.8),
+                ),
               ),
             ),
-
-            // Right Action Buttons: 📞 Voice, 📹 Video, 💬 Chat (matching Screen 5)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildActionBtn(
-                  icon: Icons.phone_outlined,
-                  tooltip: 'Voice Call',
-                  onTap: () => context.push('/call', extra: friend),
-                ),
-                const SizedBox(width: 6),
-                _buildActionBtn(
-                  icon: Icons.videocam_outlined,
-                  tooltip: 'Video Call',
-                  onTap: () => context.push('/call/video', extra: friend),
-                ),
-                const SizedBox(width: 6),
-                _buildActionBtn(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  tooltip: 'Chat',
-                  onTap: () => context.push('/chat/${friend.friendshipId}', extra: friend),
-                ),
-              ],
-            ),
-          ],
+        ],
+      ),
+      title: Text(
+        friend.displayName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 15,
+          color: FriendLoopColors.plum,
         ),
       ),
-    );
-  }
-
-  Widget _buildActionBtn({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F0FD),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFEAD8FA), width: 1),
+      subtitle: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isOnline ? Icons.circle : Icons.schedule,
+            size: isOnline ? 8 : 13,
+            color: isOnline ? FriendLoopColors.onlineGreen : FriendLoopColors.textMuted,
           ),
-          child: Center(
-            child: Icon(icon, color: FriendLoopColors.violet, size: 18),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              '${isOnline ? "Online" : (friend.statusText ?? "Offline")} • $location',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: FriendLoopColors.textSecondary,
+              ),
+            ),
           ),
-        ),
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            icon: const Icon(Icons.phone_outlined, color: FriendLoopColors.violet, size: 21),
+            tooltip: 'Voice Call',
+            onPressed: () {
+              if (!CoinBilling.checkAndDeductForAction(
+                context: context,
+                ref: ref,
+                actionType: CoinActionType.voice,
+                friend: friend,
+              )) {
+                return;
+              }
+              context.push('/call', extra: friend);
+            },
+          ),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            icon: const Icon(Icons.videocam_outlined, color: FriendLoopColors.violet, size: 21),
+            tooltip: 'Video Call',
+            onPressed: () {
+              if (!CoinBilling.checkAndDeductForAction(
+                context: context,
+                ref: ref,
+                actionType: CoinActionType.video,
+                friend: friend,
+              )) {
+                return;
+              }
+              context.push('/call/video', extra: friend);
+            },
+          ),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            icon: const Icon(Icons.chat_bubble_outline_rounded, color: FriendLoopColors.violet, size: 20),
+            tooltip: 'Chat',
+            onPressed: () {
+              if (!CoinBilling.checkAndDeductForAction(
+                context: context,
+                ref: ref,
+                actionType: CoinActionType.chat,
+                friend: friend,
+                chatRouteId: friend.friendshipId,
+              )) {
+                return;
+              }
+              context.push('/chat/${friend.friendshipId}', extra: friend);
+            },
+          ),
+        ],
       ),
     );
   }

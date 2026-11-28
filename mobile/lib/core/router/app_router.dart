@@ -27,7 +27,9 @@ import '../../features/call/video_call_screen.dart';
 import '../../features/match/queue_screen.dart';
 import '../../features/post_call/post_call_screen.dart';
 import '../../features/admin/admin_dashboard_screen.dart';
+import '../../features/notifications/notifications_screen.dart';
 import '../providers/friends_provider.dart';
+import '../utils/coin_billing.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/welcome',
@@ -132,7 +134,14 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/wallet',
-      builder: (context, state) => const WalletScreen(),
+      builder: (context, state) {
+        final pending = state.extra is PendingCoinAction ? state.extra as PendingCoinAction : null;
+        return WalletScreen(pendingAction: pending);
+      },
+    ),
+    GoRoute(
+      path: '/notifications',
+      builder: (context, state) => const NotificationsScreen(),
     ),
     GoRoute(
       path: '/plus',

@@ -5,11 +5,15 @@ import '../../../core/theme/colors.dart';
 class CarromClashGameView extends StatefulWidget {
   final VoidCallback? onBack;
   final Map<String, dynamic>? roomData;
+  final bool isPublicViewer;
+  final void Function(String winnerName, String summary)? onGameFinished;
 
   const CarromClashGameView({
     super.key,
     this.onBack,
     this.roomData,
+    this.isPublicViewer = false,
+    this.onGameFinished,
   });
 
   @override
@@ -24,6 +28,7 @@ class _CarromClashGameViewState extends State<CarromClashGameView> with SingleTi
   int _rheaScore = 10;
   int _secondsLeft = 14;
   bool _isStriking = false;
+  bool _hasEnded = false;
   String _activeBanter = '😏 Queen is mine!';
   late AnimationController _strikeController;
   late Animation<double> _strikeAnim;
@@ -56,7 +61,13 @@ class _CarromClashGameViewState extends State<CarromClashGameView> with SingleTi
   }
 
   void _triggerStrike() {
-    if (_isStriking) return;
+    if (widget.isPublicViewer) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Public viewers can watch, comment & send gifts.')),
+      );
+      return;
+    }
+    if (_isStriking || _hasEnded) return;
     setState(() => _isStriking = true);
     _strikeController.forward(from: 0).then((_) {
       _strikeController.reverse().then((_) {
@@ -76,6 +87,13 @@ class _CarromClashGameViewState extends State<CarromClashGameView> with SingleTi
             duration: Duration(seconds: 2),
           ),
         );
+        if (_userScore >= 25 && !_hasEnded) {
+          _hasEnded = true;
+          widget.onGameFinished?.call(
+            'You',
+            'Won Carrom Clash $_userScore - $_rheaScore (20 Coin Pot)!',
+          );
+        }
       });
     });
   }
@@ -167,8 +185,8 @@ class _CarromClashGameViewState extends State<CarromClashGameView> with SingleTi
               ),
             ),
 
-            // Interactive Controls
-            _buildControls(),
+            // Interactive Controls (hidden for public viewers)
+            if (!widget.isPublicViewer) _buildControls(),
 
             // Quick Banter & Gifts
             _buildBanterAndCheer(),

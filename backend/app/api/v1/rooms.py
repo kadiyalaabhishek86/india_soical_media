@@ -385,6 +385,19 @@ async def leave_room(
 
     return {"status": "left"}
 
+@router.post("/{room_id}/close")
+async def close_room(
+    room_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    q = select(PartyRoom).where(PartyRoom.id == room_id)
+    res = await db.execute(q)
+    room = res.scalar_one_or_none()
+    if room:
+        room.status = "closed"
+        await db.commit()
+    return {"status": "closed"}
+
 @router.post("/{room_id}/request-speak")
 async def request_speak(
     room_id: str,

@@ -21,6 +21,7 @@ class FriendLoopTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       fontFamily: 'Inter',
+      fontFamilyFallback: const ['Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'sans-serif'],
       scaffoldBackgroundColor: FriendLoopColors.background,
       colorScheme: const ColorScheme.light(
         primary: FriendLoopColors.primary,

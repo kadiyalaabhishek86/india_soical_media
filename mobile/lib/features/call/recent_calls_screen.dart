@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
+import '../../core/providers/recent_calls_provider.dart';
+import '../../core/providers/friends_provider.dart';
+import '../../core/utils/coin_billing.dart';
+import '../../core/utils/nav_helper.dart';
 
 class RecentCallsScreen extends ConsumerStatefulWidget {
   const RecentCallsScreen({super.key});
@@ -13,48 +17,14 @@ class RecentCallsScreen extends ConsumerStatefulWidget {
 class _RecentCallsScreenState extends ConsumerState<RecentCallsScreen> {
   int _selectedTab = 0; // 0 = All, 1 = Incoming, 2 = Outgoing, 3 = Missed
 
-  final List<Map<String, dynamic>> _allCalls = [
-    {
-      'name': 'Rohan Verma',
-      'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-      'type': 'outgoing',
-      'mode': 'voice',
-      'time': '5 min ago',
-      'coins': 10,
-    },
-    {
-      'name': 'Priya Sharma',
-      'avatar': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-      'type': 'missed',
-      'mode': 'video',
-      'time': '32 min ago',
-      'coins': 0,
-    },
-    {
-      'name': 'Sneha Iyer',
-      'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
-      'type': 'incoming',
-      'mode': 'voice',
-      'time': '1 hr ago',
-      'coins': 20,
-    },
-    {
-      'name': 'Rahul Varma',
-      'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
-      'type': 'incoming',
-      'mode': 'voice',
-      'time': 'Yesterday, 8:40 PM',
-      'coins': 10,
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final filtered = _allCalls.where((c) {
+    final allCalls = ref.watch(recentCallsProvider);
+    final filtered = allCalls.where((c) {
       if (_selectedTab == 0) return true;
-      if (_selectedTab == 1) return c['type'] == 'incoming';
-      if (_selectedTab == 2) return c['type'] == 'outgoing';
-      if (_selectedTab == 3) return c['type'] == 'missed';
+      if (_selectedTab == 1) return c.type == 'incoming';
+      if (_selectedTab == 2) return c.type == 'outgoing';
+      if (_selectedTab == 3) return c.type == 'missed';
       return true;
     }).toList();
 
@@ -65,7 +35,7 @@ class _RecentCallsScreenState extends ConsumerState<RecentCallsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () => context.pop(),
+          onPressed: () => safePop(context),
         ),
         title: Image.asset(
           'assets/images/friendloop_logo.png',
@@ -83,7 +53,7 @@ class _RecentCallsScreenState extends ConsumerState<RecentCallsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Screen Title: Recent Calls (matching mockup)
+            // Screen Title: Recent Calls
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
               child: Text(
@@ -123,23 +93,29 @@ class _RecentCallsScreenState extends ConsumerState<RecentCallsScreen> {
                       separatorBuilder: (_, __) => const Divider(height: 1, indent: 64, color: FriendLoopColors.border),
                       itemBuilder: (ctx, idx) {
                         final call = filtered[idx];
-                        final isMissed = call['type'] == 'missed';
-                        final isOutgoing = call['type'] == 'outgoing';
+                        final isMissed = call.type == 'missed';
+                        final isOutgoing = call.type == 'outgoing';
                         final typeLabel = isMissed ? 'Missed' : (isOutgoing ? 'Outgoing' : 'Incoming');
-                        final coinText = (call['coins'] != null && (call['coins'] as int) > 0)
-                            ? ' (${call['coins']} 🪙)'
-                            : '';
+                        final coinText = call.coins > 0 ? ' (${call.coins} 🪙)' : '';
 
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                          leading: CircleAvatar(
-                            radius: 22,
-                            backgroundImage: NetworkImage(call['avatar']),
-                            onBackgroundImageError: (_, __) {},
-                            child: const Icon(Icons.person, color: FriendLoopColors.plum),
+                          leading: ClipOval(
+                            child: SizedBox(
+                              width: 44,
+                              height: 44,
+                              child: Image.network(
+                                call.avatar,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: FriendLoopColors.lavender,
+                                  child: const Icon(Icons.person, color: FriendLoopColors.plum),
+                                ),
+                              ),
+                            ),
                           ),
                           title: Text(
-                            call['name'],
+                            call.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -161,7 +137,7 @@ class _RecentCallsScreenState extends ConsumerState<RecentCallsScreen> {
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
-                                  '$typeLabel • ${call['time']}$coinText',
+                                  '$typeLabel • ${call.time}$coinText',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -175,12 +151,28 @@ class _RecentCallsScreenState extends ConsumerState<RecentCallsScreen> {
                           ),
                           trailing: IconButton(
                             icon: Icon(
-                              call['mode'] == 'video' ? Icons.videocam_outlined : Icons.phone_outlined,
+                              call.mode == 'video' ? Icons.videocam_outlined : Icons.phone_outlined,
                               color: FriendLoopColors.violet,
                               size: 22,
                             ),
                             onPressed: () {
-                              context.push('/call');
+                              final friend = FriendItem(
+                                friendshipId: call.id,
+                                friendId: call.id,
+                                displayName: call.name,
+                                state: 'India',
+                                images: [call.avatar],
+                              );
+                              final actionType = call.mode == 'video' ? CoinActionType.video : CoinActionType.voice;
+                              if (!CoinBilling.checkAndDeductForAction(
+                                context: context,
+                                ref: ref,
+                                actionType: actionType,
+                                friend: friend,
+                              )) {
+                                return;
+                              }
+                              context.push(call.mode == 'video' ? '/call/video' : '/call', extra: friend);
                             },
                           ),
                         );
@@ -197,7 +189,12 @@ class _RecentCallsScreenState extends ConsumerState<RecentCallsScreen> {
     final isSelected = _selectedTab == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedTab = index),
+        onTap: () {
+          setState(() => _selectedTab = index);
+          if (index == 3) {
+            ref.read(recentCallsProvider.notifier).markMissedCallsSeen();
+          }
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(

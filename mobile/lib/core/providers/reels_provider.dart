@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/api_client.dart';
+import '../constants/api_endpoints.dart';
 
 final List<Map<String, dynamic>> defaultSeedReels = [
   {
@@ -93,6 +94,17 @@ class ReelsNotifier extends StateNotifier<List<Map<String, dynamic>>> {
   /// Fetches reels from backend API, while ensuring user's uploaded reels stay at index 0.
   /// When [shuffle] is true (e.g. reload or pull-to-refresh), feed reels are refreshed and rotated.
   Future<void> fetchReels({String feed = 'discover', bool shuffle = false}) async {
+    final bool isFriendsFeed = feed == 'friends' || feed == 'following';
+    const friendNames = {'Priya Patel', 'Rohit Verma', 'Neha Jain', 'Ananya Reddy', 'You'};
+
+    List<Map<String, dynamic>> applyFeedOrder(List<Map<String, dynamic>> items) {
+      if (!isFriendsFeed) return items;
+      final friendReels = items
+          .where((r) => friendNames.any((n) => (r['user_name'] ?? '').toString().toLowerCase().contains(n.toLowerCase())))
+          .toList();
+      return friendReels.isNotEmpty ? friendReels : items;
+    }
+
     try {
       final res = await _client.get('/reels?feed=$feed');
       if (res is List && res.isNotEmpty) {
@@ -131,35 +143,51 @@ class ReelsNotifier extends StateNotifier<List<Map<String, dynamic>>> {
           }
         }
 
-        state = merged;
+        state = applyFeedOrder(merged);
+        return;
       }
     } catch (_) {
-      // In offline / fallback mode, keep uploaded reels + seed reels
-      final seenIds = <String>{};
-      final merged = <Map<String, dynamic>>[];
-      for (final r in _persistedUploadedReels) {
-        final id = r['id']?.toString() ?? '';
-        if (id.isNotEmpty && !seenIds.contains(id)) {
-          seenIds.add(id);
-          merged.add(r);
-        }
-      }
-      final seeds = shuffle
-          ? (List<Map<String, dynamic>>.from(defaultSeedReels)..shuffle())
-          : defaultSeedReels;
-      for (final r in seeds) {
-        final id = r['id']?.toString() ?? '';
-        if (id.isNotEmpty && !seenIds.contains(id)) {
-          seenIds.add(id);
-          merged.add(r);
-        }
-      }
-      state = merged;
+      // Fall through to offline / fallback merge below
     }
+
+    // In offline / fallback mode, keep uploaded reels + seed reels
+    final seenIds = <String>{};
+    final merged = <Map<String, dynamic>>[];
+    for (final r in _persistedUploadedReels) {
+      final id = r['id']?.toString() ?? '';
+      if (id.isNotEmpty && !seenIds.contains(id)) {
+        seenIds.add(id);
+        merged.add(r);
+      }
+    }
+    final seeds = shuffle
+        ? (List<Map<String, dynamic>>.from(defaultSeedReels)..shuffle())
+        : defaultSeedReels;
+    for (final r in seeds) {
+      final id = r['id']?.toString() ?? '';
+      if (id.isNotEmpty && !seenIds.contains(id)) {
+        seenIds.add(id);
+        merged.add(r);
+      }
+    }
+    state = applyFeedOrder(merged);
   }
 
   void removeReel(String reelId) {
     state = state.where((r) => r['id']?.toString() != reelId).toList();
+  }
+
+  void incrementCommentCount(String reelId) {
+    state = state.map((reel) {
+      if (reel['id']?.toString() == reelId) {
+        final count = (reel['comments_count'] is num) ? (reel['comments_count'] as num).toInt() : 0;
+        return {
+          ...reel,
+          'comments_count': count + 1,
+        };
+      }
+      return reel;
+    }).toList();
   }
 
   void toggleLike(String reelId) {
@@ -176,7 +204,9 @@ class ReelsNotifier extends StateNotifier<List<Map<String, dynamic>>> {
       return reel;
     }).toList();
 
-    _client.post('/reels/$reelId/like').catchError((_) => null);
+    if (ApiEndpoints.isValidUuid(reelId)) {
+      _client.post('/reels/$reelId/like').catchError((_) => null);
+    }
   }
 }
 

@@ -4,9 +4,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/network/api_client.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/utils/coin_billing.dart';
+import '../../core/utils/nav_helper.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
-  const WalletScreen({super.key});
+  final PendingCoinAction? pendingAction;
+
+  const WalletScreen({super.key, this.pendingAction});
 
   @override
   ConsumerState<WalletScreen> createState() => _WalletScreenState();
@@ -342,6 +346,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).currentUserProfile;
     final coins = user?.coins ?? 120;
+    final isPlus = user?.isPlusSubscriber ?? false;
+    final voiceRate = CoinBilling.costForAction(CoinActionType.voice, isPlus: isPlus);
+    final videoRate = CoinBilling.costForAction(CoinActionType.video, isPlus: isPlus);
+    final chatRate = CoinBilling.costForAction(CoinActionType.chat, isPlus: isPlus);
+    final pending = widget.pendingAction;
+    final pendingCost = pending != null
+        ? CoinBilling.costForAction(pending.actionType, isPlus: isPlus)
+        : 0;
     final displayedPacks = _showAllPacks ? _packs : _packs.take(3).toList();
     final filteredHistory = _getFilteredTransactions();
 
@@ -352,7 +364,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () => context.pop(),
+          onPressed: () => safePop(context),
         ),
         title: const Text(
           'Coin Wallet',
@@ -366,6 +378,68 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (pending != null) ...[
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: coins >= pendingCost ? const Color(0xFFEAFBF0) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: coins >= pendingCost ? FriendLoopColors.success : FriendLoopColors.violet,
+                      width: 1.4,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        coins >= pendingCost
+                            ? 'Coins Verified for ${pending.actionLabel}!'
+                            : '${pending.actionLabel} requires $pendingCost coins (${CoinBilling.planLabel(isPlus)})',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: FriendLoopColors.plum,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        coins >= pendingCost
+                            ? 'Your balance ($coins coins) covers the $pendingCost coin plan deduction.'
+                            : 'You currently have $coins coins. Add coins below, then continue.',
+                        style: const TextStyle(fontSize: 12, color: FriendLoopColors.textSecondary),
+                      ),
+                      if (coins >= pendingCost) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              ref.read(authProvider.notifier).updateCoins(coins - pendingCost);
+                              if (pending.actionType == CoinActionType.voice) {
+                                context.pushReplacement('/call', extra: pending.friend);
+                              } else if (pending.actionType == CoinActionType.video) {
+                                context.pushReplacement('/call/video', extra: pending.friend);
+                              } else {
+                                final chatId = pending.chatRouteId ?? pending.friend?.friendshipId ?? '';
+                                context.pushReplacement('/chat/$chatId', extra: pending.friend);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: FriendLoopColors.violet,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Start ${pending.actionLabel} (-$pendingCost coins)'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
               // Balance Hero Card matching FriendLoop mockup
               Container(
                 width: double.infinity,
@@ -445,11 +519,27 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         color: Colors.white.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Text(
-                        'Voice 10 coins/min · Video 40 coins/min',
-                        style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600),
+                      child: Text(
+                        '${CoinBilling.planLabel(isPlus)}: Voice ${voiceRate}c/m · Video ${videoRate}c/m · Chat ${chatRate}c',
+                        style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600),
+                        textAlign: TextAlign.center,
                       ),
                     ),
+                    if (!isPlus) ...[
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () => context.push('/plus'),
+                        child: const Text(
+                          'Upgrade to Plus for 50% off coin rates ›',
+                          style: TextStyle(
+                            color: FriendLoopColors.gold,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/providers/friends_provider.dart';
 import '../../core/providers/chats_inbox_provider.dart';
+import '../../core/providers/recent_calls_provider.dart';
+import '../../core/providers/notifications_provider.dart';
 
 class ChatsInboxScreen extends ConsumerStatefulWidget {
   const ChatsInboxScreen({super.key});
@@ -35,6 +37,7 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
     });
 
     final allChats = ref.watch(chatsInboxProvider);
+    final totalNotifications = ref.watch(totalNotificationsBadgeProvider);
 
     final filtered = allChats.where((c) {
       if (_searchQuery.isEmpty) return true;
@@ -63,6 +66,8 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
             tooltip: 'Mark all as read',
             onPressed: () {
               ref.read(chatsInboxProvider.notifier).markAllAsRead();
+              ref.read(recentCallsProvider.notifier).markMissedCallsSeen();
+              ref.read(notificationsProvider.notifier).markAllRead();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('All messages marked as read! ✓'),
@@ -73,8 +78,17 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.notifications_none_outlined, color: FriendLoopColors.plum),
-            onPressed: () {},
+            icon: Badge(
+              isLabelVisible: totalNotifications > 0,
+              backgroundColor: FriendLoopColors.rose,
+              label: Text(
+                '$totalNotifications',
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+              child: const Icon(Icons.notifications_none_outlined, color: FriendLoopColors.plum),
+            ),
+            tooltip: 'Notifications (Unread Messages & Missed Calls)',
+            onPressed: () => context.push('/notifications'),
           ),
         ],
       ),
@@ -188,11 +202,19 @@ class _ChatsInboxScreenState extends ConsumerState<ChatsInboxScreen> {
                     },
                     leading: Stack(
                       children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundImage: NetworkImage(chat.avatar),
-                          onBackgroundImageError: (_, __) {},
-                          child: const Icon(Icons.person, color: FriendLoopColors.plum),
+                        ClipOval(
+                          child: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Image.network(
+                              chat.avatar,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: FriendLoopColors.lavender,
+                                child: const Icon(Icons.person, color: FriendLoopColors.plum),
+                              ),
+                            ),
+                          ),
                         ),
                         if (isOnline)
                           Positioned(

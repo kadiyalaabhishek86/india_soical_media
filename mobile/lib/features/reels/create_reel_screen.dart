@@ -9,6 +9,7 @@ import '../../core/network/api_client.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/providers/reels_provider.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/utils/nav_helper.dart';
 import 'video_controller_helper.dart';
 
 class CreateReelScreen extends ConsumerStatefulWidget {
@@ -345,7 +346,7 @@ class _CreateReelScreenState extends ConsumerState<CreateReelScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () => context.pop(),
+          onPressed: () => safePop(context, fallbackRoute: '/reels'),
         ),
         title: const Text(
           'Upload Reel',

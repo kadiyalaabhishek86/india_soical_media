@@ -5,11 +5,15 @@ import '../../../core/theme/colors.dart';
 class LudoPartyGameView extends StatefulWidget {
   final VoidCallback? onBack;
   final Map<String, dynamic>? roomData;
+  final bool isPublicViewer;
+  final void Function(String winnerName, String summary)? onGameFinished;
 
   const LudoPartyGameView({
     super.key,
     this.onBack,
     this.roomData,
+    this.isPublicViewer = false,
+    this.onGameFinished,
   });
 
   @override
@@ -28,6 +32,7 @@ class _LudoPartyGameViewState extends State<LudoPartyGameView> with SingleTicker
   int _coins = 40;
   String _activeBanter = 'Partner, protect me! 🛡️';
   bool _hasRolled = true;
+  bool _hasEnded = false;
 
   late AnimationController _diceController;
 
@@ -47,7 +52,7 @@ class _LudoPartyGameViewState extends State<LudoPartyGameView> with SingleTicker
   }
 
   void _rollDice() {
-    if (_isRolling) return;
+    if (widget.isPublicViewer || _isRolling || _hasEnded) return;
     setState(() => _isRolling = true);
     _diceController.forward(from: 0).then((_) {
       if (!mounted) return;
@@ -68,6 +73,7 @@ class _LudoPartyGameViewState extends State<LudoPartyGameView> with SingleTicker
   }
 
   void _advancePawn() {
+    if (widget.isPublicViewer || _hasEnded) return;
     setState(() {
       if (_selectedPawn == 1) {
         if (_diceNumber == 6 && _pawn1Step == -1) {
@@ -103,6 +109,13 @@ class _LudoPartyGameViewState extends State<LudoPartyGameView> with SingleTicker
         );
       }
     });
+    if (_violetHome >= 4 && !_hasEnded) {
+      _hasEnded = true;
+      widget.onGameFinished?.call(
+        'Team Violet (You & Priya)',
+        'All pawns reached Home ($_violetHome/4)!',
+      );
+    }
   }
 
   void _sendGift(String name, int cost) {
@@ -273,13 +286,15 @@ class _LudoPartyGameViewState extends State<LudoPartyGameView> with SingleTicker
                     ),
                     const SizedBox(height: 14),
 
-                    // Next Action Panel (Matching Mockup with 3D dice, text, and primary action button)
-                    _buildActionPanel(),
-                    const SizedBox(height: 12),
+                    if (!widget.isPublicViewer) ...[
+                      // Next Action Panel (Matching Mockup with 3D dice, text, and primary action button)
+                      _buildActionPanel(),
+                      const SizedBox(height: 12),
 
-                    // Pawn Selection Cards (Deploy Pawn #1 / Move Pawn #2)
-                    _buildPawnActionCards(),
-                    const SizedBox(height: 12),
+                      // Pawn Selection Cards (Deploy Pawn #1 / Move Pawn #2)
+                      _buildPawnActionCards(),
+                      const SizedBox(height: 12),
+                    ],
 
                     // Voice Chat Pill
                     _buildVoiceChatBar(),

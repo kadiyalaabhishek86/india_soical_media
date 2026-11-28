@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/colors.dart';
 import '../../core/network/api_client.dart';
 import '../../core/constants/api_endpoints.dart';
+import '../../core/utils/nav_helper.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/rooms_provider.dart';
 import 'games/carrom_clash_game_view.dart';
 import 'games/voice_mimic_party_view.dart';
 import 'games/truth_or_dare_game_view.dart';
@@ -32,6 +36,29 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
   bool _isSpeaker = false;
   String _activeGame = 'none';
   int _viewMode = 0; // 0 = Game Arena, 1 = Room Stage
+
+  // 15-minute (900s) timer for voice/video rooms
+  Timer? _roomTimer;
+  Timer? _autoCloseTimer;
+  int _roomRemainingSeconds = 900;
+  bool _isExpiryPromptOpen = false;
+  bool _isTwoPlayerAutoPlay = false;
+
+  // Interactive room comments & gifts (used by public viewers and participants)
+  final List<Map<String, String>> _roomComments = [
+    {'name': 'Rahul', 'text': 'Welcome everyone to the room! 🎉'},
+    {'name': 'Priya', 'text': 'Hey all! Who is playing with us?'},
+    {'name': 'Karan', 'text': 'I am in! Let’s go! 🎯'},
+  ];
+  final TextEditingController _commentInputController = TextEditingController();
+
+  bool get _isPublicViewer {
+    if (_room?['is_public_viewer'] == true) return true;
+    final access = _room?['access_type']?.toString() ?? 'public';
+    final isHost = _room?['is_host'] == true || _room?['host_id'] == 'current-user';
+    // In friends_public rooms, non-host/public visitors are public viewers (can watch, comment & send gifts)
+    return access == 'friends_public' && !isHost;
+  }
 
   final List<Map<String, dynamic>> _mockVideoParticipants = [
     {
@@ -65,15 +92,266 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
     super.initState();
     _room = widget.initialRoomData;
     _activeGame = _room?['activity_type'] ?? 'none';
-    if (_activeGame == 'carrom' || _activeGame == 'ludo' || _activeGame == 'truth_or_dare' || _activeGame == 'voice_mimic') {
+    final activeCount = (_room?['active_count'] is num) ? (_room?['active_count'] as num).toInt() : 4;
+    final isGame = _activeGame == 'carrom' || _activeGame == 'ludo' || _activeGame == 'truth_or_dare' || _activeGame == 'voice_mimic';
+    if (activeCount == 2) {
+      _isTwoPlayerAutoPlay = true;
+    }
+    if (isGame) {
       _viewMode = 0; // Default to Game Arena if a game activity is selected
     } else {
       _viewMode = 1; // Default to Room Stage for voice_lounge or video_stage
     }
+    _startRoomDurationTimer();
     _fetchDetail();
   }
 
+  @override
+  void dispose() {
+    _roomTimer?.cancel();
+    _autoCloseTimer?.cancel();
+    _commentInputController.dispose();
+    super.dispose();
+  }
+
+  void _startRoomDurationTimer() {
+    _roomTimer?.cancel();
+    _roomTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_roomRemainingSeconds > 1) {
+        setState(() => _roomRemainingSeconds--);
+      } else {
+        setState(() => _roomRemainingSeconds = 0);
+        _roomTimer?.cancel();
+        _onFifteenMinutesReached();
+      }
+    });
+  }
+
+  String _formatRemaining(int secs) {
+    final m = (secs ~/ 60).toString().padLeft(2, '0');
+    final s = (secs % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  void _onFifteenMinutesReached() {
+    if (_isExpiryPromptOpen || !mounted) return;
+    _isExpiryPromptOpen = true;
+    final isVideo = _room?['room_type'] == 'video';
+    final extendCost = isVideo ? 50 : 20;
+
+    // Auto-cancel room if user doesn't pay to extend within 15 seconds
+    _autoCloseTimer?.cancel();
+    _autoCloseTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted && _isExpiryPromptOpen) {
+        Navigator.of(context, rootNavigator: true).maybePop();
+        _cancelAndCloseRoom('Room automatically cancelled after 15 minutes.');
+      }
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('15-Min Room Limit Reached', style: TextStyle(fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
+        content: Text(
+          'Your ${isVideo ? "Video" : "Voice"} room has reached the 15-minute limit. Pay $extendCost coins to extend for another 15 minutes, or the room will be automatically cancelled.',
+          style: const TextStyle(color: FriendLoopColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _autoCloseTimer?.cancel();
+              _isExpiryPromptOpen = false;
+              Navigator.pop(ctx);
+              _cancelAndCloseRoom('Room ended after 15 minutes.');
+            },
+            child: const Text('End Room', style: TextStyle(color: FriendLoopColors.rose)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: FriendLoopColors.violet, foregroundColor: Colors.white),
+            onPressed: () {
+              _autoCloseTimer?.cancel();
+              _isExpiryPromptOpen = false;
+              Navigator.pop(ctx);
+              final coins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
+              if (coins < extendCost) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Need $extendCost coins to extend 15 mins (you have $coins). Opening Coins page...'),
+                    backgroundColor: FriendLoopColors.plum,
+                  ),
+                );
+                context.push('/wallet');
+                return;
+              }
+              ref.read(authProvider.notifier).updateCoins(coins - extendCost);
+              ref.read(roomsProvider.notifier).extendRoomDuration(widget.roomId);
+              setState(() => _roomRemainingSeconds = 900);
+              _startRoomDurationTimer();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Room extended by 15 minutes! (-$extendCost coins)'),
+                  backgroundColor: FriendLoopColors.success,
+                ),
+              );
+            },
+            child: Text('Pay $extendCost 🪙 & Extend 15m'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _cancelAndCloseRoom(String message) {
+    ref.read(roomsProvider.notifier).closeRoom(widget.roomId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: FriendLoopColors.plum),
+    );
+    safePop(context, fallbackRoute: '/rooms');
+  }
+
+  void _handleGameFinished(String winnerName, String summary) {
+    if (!mounted) return;
+    _roomTimer?.cancel();
+    _autoCloseTimer?.cancel();
+    ref.read(roomsProvider.notifier).closeRoom(widget.roomId);
+
+    // Automatically close the room after announcing the winner
+    _autoCloseTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).maybePop();
+        safePop(context, fallbackRoute: '/rooms');
+      }
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Text('🏆 ', style: TextStyle(fontSize: 26)),
+            Expanded(
+              child: Text(
+                'Winner Announced!',
+                style: TextStyle(fontWeight: FontWeight.w800, color: FriendLoopColors.plum),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Winner: $winnerName',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: FriendLoopColors.violet),
+            ),
+            const SizedBox(height: 6),
+            Text(summary, style: const TextStyle(fontSize: 13, color: FriendLoopColors.textSecondary)),
+            const SizedBox(height: 10),
+            const Text(
+              'Closing room automatically...',
+              style: TextStyle(fontSize: 11.5, color: FriendLoopColors.textMuted),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: FriendLoopColors.violet, foregroundColor: Colors.white),
+            onPressed: () {
+              _autoCloseTimer?.cancel();
+              Navigator.pop(ctx);
+              if (mounted) safePop(context, fallbackRoute: '/rooms');
+            },
+            child: const Text('Close Room'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGiftSheet() {
+    final gifts = [
+      {'icon': '🌹', 'name': 'Rose', 'cost': 5},
+      {'icon': '☕', 'name': 'Coffee', 'cost': 10},
+      {'icon': '💎', 'name': 'Diamond', 'cost': 25},
+      {'icon': '👑', 'name': 'Crown', 'cost': 50},
+    ];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Send a Gift', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: FriendLoopColors.plum)),
+              const SizedBox(height: 12),
+              Row(
+                children: gifts.map((g) {
+                  final cost = g['cost'] as int;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        final coins = ref.read(authProvider).currentUserProfile?.coins ?? 120;
+                        if (coins < cost) {
+                          context.push('/wallet');
+                          return;
+                        }
+                        ref.read(authProvider.notifier).updateCoins(coins - cost);
+                        setState(() {
+                          _roomComments.add({
+                            'name': 'You',
+                            'text': 'Sent ${g['icon']} ${g['name']} (-$cost coins)!',
+                          });
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('🎁 Sent ${g['icon']} ${g['name']}! (-$cost coins)'),
+                            backgroundColor: FriendLoopColors.brightViolet,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF0F5),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFFD1DC)),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(g['icon'] as String, style: const TextStyle(fontSize: 26)),
+                            const SizedBox(height: 4),
+                            Text(g['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: FriendLoopColors.plum)),
+                            Text('${cost}c', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.pink)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _fetchDetail() async {
+    if (!ApiEndpoints.isValidUuid(widget.roomId)) return;
     try {
       final res = await _client.get('/rooms/${widget.roomId}');
       if (mounted && res is Map<String, dynamic>) {
@@ -88,20 +366,33 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
   }
 
   Future<void> _requestToSpeak() async {
+    if (!ApiEndpoints.isValidUuid(widget.roomId)) {
+      setState(() => _isSpeaker = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You are now a speaker! 🎙️'), backgroundColor: FriendLoopColors.success),
+        );
+      }
+      return;
+    }
     try {
       await _client.post('/rooms/${widget.roomId}/request-speak');
       setState(() => _isSpeaker = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are now a speaker! 🎙️'), backgroundColor: FriendLoopColors.success),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You are now a speaker! 🎙️'), backgroundColor: FriendLoopColors.success),
+        );
+      }
     } catch (_) {}
   }
 
   Future<void> _handleLeave() async {
-    try {
-      await _client.post('/rooms/${widget.roomId}/leave');
-    } catch (_) {}
-    if (mounted) context.pop();
+    if (ApiEndpoints.isValidUuid(widget.roomId)) {
+      try {
+        await _client.post('/rooms/${widget.roomId}/leave');
+      } catch (_) {}
+    }
+    if (mounted) safePop(context, fallbackRoute: '/rooms');
   }
 
   void _showGameSelector() {
@@ -181,32 +472,57 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, top: 16, left: 16, right: 16),
-        child: SizedBox(
-          height: 380,
-          child: Column(
-            children: [
-              Text('Room Chat (${_room?['title'] ?? 'Party'})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const Divider(),
-              Expanded(
-                child: ListView(
-                  children: const [
-                    ListTile(leading: CircleAvatar(child: Text('R')), title: Text('Rahul'), subtitle: Text('Welcome everyone to the room! 🎉')),
-                    ListTile(leading: CircleAvatar(child: Text('P')), title: Text('Priya'), subtitle: Text('Hey all! Who is playing with us?')),
-                    ListTile(leading: CircleAvatar(child: Text('K')), title: Text('Karan'), subtitle: Text('I am in! Let’s go! 🎯')),
+      builder: (ctx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom, top: 16, left: 16, right: 16),
+          child: SizedBox(
+            height: 380,
+            child: Column(
+              children: [
+                Text('Room Comments (${_room?['title'] ?? 'Party'})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Divider(),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _roomComments.length,
+                    itemBuilder: (_, idx) {
+                      final c = _roomComments[idx];
+                      final name = c['name'] ?? 'User';
+                      return ListTile(
+                        leading: CircleAvatar(child: Text(name.isNotEmpty ? name[0] : 'U')),
+                        title: Text(name),
+                        subtitle: Text(c['text'] ?? ''),
+                      );
+                    },
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _commentInputController,
+                        decoration: InputDecoration(
+                          hintText: 'Write a comment...',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.send, color: FriendLoopColors.violet),
+                      onPressed: () {
+                        final text = _commentInputController.text.trim();
+                        if (text.isEmpty) return;
+                        _commentInputController.clear();
+                        setState(() => _roomComments.add({'name': 'You', 'text': text}));
+                        setSheetState(() {});
+                      },
+                    ),
                   ],
                 ),
-              ),
-              TextField(
-                decoration: InputDecoration(
-                  hintText: 'Send message to room...',
-                  suffixIcon: const Icon(Icons.send, color: FriendLoopColors.violet),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
         ),
       ),
@@ -314,6 +630,28 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
           children: [
             // Mode Switcher Banner (Game Arena vs Stage)
             _buildViewModeToggle(),
+            if (_isTwoPlayerAutoPlay)
+              Container(
+                width: double.infinity,
+                color: FriendLoopColors.lavender,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: const Text(
+                  '⚡ 2 Players Connected — System Auto-Playing Match!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: FriendLoopColors.violet),
+                ),
+              ),
+            if (_isPublicViewer)
+              Container(
+                width: double.infinity,
+                color: FriendLoopColors.plum,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: const Text(
+                  '👀 Public Spectator View — Watch, Comment & Send Gifts',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
 
             // Active Game Screen
             Expanded(
@@ -341,8 +679,8 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isVideo ? Colors.white : FriendLoopColors.plum),
             ),
             Text(
-              '${isVideo ? 'Video Stage' : 'Live Voice Room'} • $count in room',
-              style: TextStyle(fontSize: 12, color: isVideo ? Colors.white70 : FriendLoopColors.textSecondary),
+              '${isVideo ? 'Video Stage' : 'Live Voice Room'} • $count in room • ⏱️ ${_formatRemaining(_roomRemainingSeconds)}',
+              style: TextStyle(fontSize: 11.5, color: isVideo ? Colors.white70 : FriendLoopColors.textSecondary),
             ),
           ],
         ),
@@ -505,15 +843,40 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
   Widget _buildActiveGameView() {
     switch (_activeGame) {
       case 'carrom':
-        return CarromClashGameView(onBack: _handleLeave, roomData: _room);
+        return CarromClashGameView(
+          onBack: _handleLeave,
+          roomData: _room,
+          isPublicViewer: _isPublicViewer,
+          onGameFinished: _handleGameFinished,
+        );
       case 'voice_mimic':
-        return VoiceMimicPartyView(onBack: _handleLeave, roomData: _room);
+        return VoiceMimicPartyView(
+          onBack: _handleLeave,
+          roomData: _room,
+          isPublicViewer: _isPublicViewer,
+          onGameFinished: _handleGameFinished,
+        );
       case 'truth_or_dare':
-        return TruthOrDareGameView(onBack: _handleLeave, roomData: _room);
+        return TruthOrDareGameView(
+          onBack: _handleLeave,
+          roomData: _room,
+          isPublicViewer: _isPublicViewer,
+          onGameFinished: _handleGameFinished,
+        );
       case 'ludo':
-        return LudoPartyGameView(onBack: _handleLeave, roomData: _room);
+        return LudoPartyGameView(
+          onBack: _handleLeave,
+          roomData: _room,
+          isPublicViewer: _isPublicViewer,
+          onGameFinished: _handleGameFinished,
+        );
       default:
-        return CarromClashGameView(onBack: _handleLeave, roomData: _room);
+        return CarromClashGameView(
+          onBack: _handleLeave,
+          roomData: _room,
+          isPublicViewer: _isPublicViewer,
+          onGameFinished: _handleGameFinished,
+        );
     }
   }
 
@@ -778,7 +1141,7 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
 
   Widget _buildBottomControls(bool isVideo) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         color: isVideo ? Colors.grey[900] : Colors.white,
         border: const Border(top: BorderSide(color: FriendLoopColors.border, width: 0.8)),
@@ -786,25 +1149,33 @@ class _RoomInsideScreenState extends ConsumerState<RoomInsideScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          IconButton(
-            icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, color: _isMuted ? FriendLoopColors.rose : FriendLoopColors.violet),
-            onPressed: () => setState(() => _isMuted = !_isMuted),
-          ),
-          if (isVideo)
+          if (!_isPublicViewer)
+            IconButton(
+              icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, color: _isMuted ? FriendLoopColors.rose : FriendLoopColors.violet),
+              onPressed: () => setState(() => _isMuted = !_isMuted),
+            ),
+          if (isVideo && !_isPublicViewer)
             IconButton(
               icon: Icon(_isCameraOff ? Icons.videocam_off : Icons.videocam, color: _isCameraOff ? FriendLoopColors.rose : FriendLoopColors.violet),
               onPressed: () => setState(() => _isCameraOff = !_isCameraOff),
             ),
           IconButton(
-            icon: const Icon(Icons.sports_esports, color: FriendLoopColors.violet),
-            tooltip: 'Choose Party Game',
-            onPressed: _showGameSelector,
+            icon: const Icon(Icons.card_giftcard, color: Colors.amber),
+            tooltip: 'Send Gift',
+            onPressed: _showGiftSheet,
           ),
-          IconButton(
-            icon: const Badge(
-              label: Text('12'),
-              child: Icon(Icons.chat_bubble_outline, color: FriendLoopColors.violet),
+          if (!_isPublicViewer)
+            IconButton(
+              icon: const Icon(Icons.sports_esports, color: FriendLoopColors.violet),
+              tooltip: 'Choose Party Game',
+              onPressed: _showGameSelector,
             ),
+          IconButton(
+            icon: Badge(
+              label: Text('${_roomComments.length}'),
+              child: const Icon(Icons.chat_bubble_outline, color: FriendLoopColors.violet),
+            ),
+            tooltip: 'Comments',
             onPressed: _showChatDialog,
           ),
           ElevatedButton.icon(

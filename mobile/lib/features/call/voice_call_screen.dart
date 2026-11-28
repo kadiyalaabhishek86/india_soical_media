@@ -8,6 +8,8 @@ import '../../shared/widgets/aara_card.dart';
 import '../../shared/widgets/aara_timer.dart';
 import '../../core/providers/call_provider.dart';
 import '../../core/providers/friends_provider.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/utils/coin_billing.dart';
 
 class VoiceCallScreen extends ConsumerStatefulWidget {
   final FriendItem? friend;
@@ -29,7 +31,27 @@ class _VoiceCallScreenState extends ConsumerState<VoiceCallScreen> {
     super.initState();
     if (widget.friend != null) {
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _friendCallSeconds++);
+        if (!mounted) return;
+        setState(() => _friendCallSeconds++);
+        // Deduct coins per minute according to active plan after the first minute
+        if (_friendCallSeconds > 0 && _friendCallSeconds % 60 == 0) {
+          final profile = ref.read(authProvider).currentUserProfile;
+          final coins = profile?.coins ?? 0;
+          final isPlus = profile?.isPlusSubscriber ?? false;
+          final rate = CoinBilling.costForAction(CoinActionType.voice, isPlus: isPlus);
+          if (coins >= rate) {
+            ref.read(authProvider.notifier).updateCoins(coins - rate);
+          } else {
+            _timer?.cancel();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Coins exhausted for Voice Call. Please recharge.'),
+                backgroundColor: FriendLoopColors.plum,
+              ),
+            );
+            context.pushReplacement('/wallet');
+          }
+        }
       });
     }
   }

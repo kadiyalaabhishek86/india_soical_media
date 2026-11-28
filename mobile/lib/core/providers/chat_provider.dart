@@ -119,6 +119,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> fetchMessages() async {
+    if (!ApiEndpoints.isValidUuid(friendshipId)) {
+      state = state.copyWith(isLoading: false);
+      return;
+    }
     try {
       final List res = await _client.get(ApiEndpoints.getMessages(friendshipId));
       final msgs = res.map((j) => ChatMessage.fromJson(j)).toList();
@@ -154,7 +158,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       isSending: false,
     );
 
-    // Sync to backend
+    // Sync to backend only for persisted UUID friendships
+    if (!ApiEndpoints.isValidUuid(friendshipId)) return;
     try {
       final res = await _client.post(ApiEndpoints.sendMessage, body: {
         'friendship_id': friendshipId,
@@ -226,14 +231,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       isSending: false,
     );
 
-    try {
-      await _client.post(ApiEndpoints.sendMessage, body: {
-        'friendship_id': friendshipId,
-        'content': rawContent,
-        'message_type': type,
-        'media_url': mediaUrl,
-      });
-    } catch (_) {}
+    if (ApiEndpoints.isValidUuid(friendshipId)) {
+      try {
+        await _client.post(ApiEndpoints.sendMessage, body: {
+          'friendship_id': friendshipId,
+          'content': rawContent,
+          'message_type': type,
+          'media_url': mediaUrl,
+        });
+      } catch (_) {}
+    }
 
     // Simulated reply for demo
     if (friendshipId.contains('33333333') || friendshipId.contains('anand')) {

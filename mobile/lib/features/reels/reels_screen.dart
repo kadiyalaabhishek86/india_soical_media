@@ -94,10 +94,11 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
     },
   ];
 
-  int _selectedTab = 0; // 0 = Discover, 1 = Following
+  int _selectedTab = 0; // 0 = Discover, 1 = Friends Reels
   int _currentPage = 0;
   int _settledPage = 0;
   bool _isScrolling = false;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -105,10 +106,33 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
     _fetchReels();
   }
 
-  void _fetchReels({bool shuffle = false}) {
-    ref.read(reelsProvider.notifier).fetchReels(
-      feed: _selectedTab == 0 ? 'discover' : 'following',
+  Future<void> _fetchReels({bool shuffle = false}) async {
+    await ref.read(reelsProvider.notifier).fetchReels(
+      feed: _selectedTab == 0 ? 'discover' : 'friends',
       shuffle: shuffle,
+    );
+  }
+
+  Future<void> _handlePullToShuffle() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    await _fetchReels(shuffle: true);
+    if (!mounted) return;
+    setState(() {
+      _isRefreshing = false;
+      _currentPage = 0;
+      _settledPage = 0;
+      _isScrolling = false;
+    });
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Reels reloaded & shuffled! 🎬'),
+        duration: Duration(seconds: 1),
+      ),
     );
   }
 
@@ -346,6 +370,15 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
                   if (!_isScrolling) {
                     setState(() => _isScrolling = true);
                   }
+                } else if (notification is OverscrollNotification) {
+                  // Dragging down on the first reel triggers automatic reload + shuffle
+                  if (_currentPage == 0 && notification.overscroll < -24 && !_isRefreshing) {
+                    _handlePullToShuffle();
+                  }
+                } else if (notification is ScrollUpdateNotification) {
+                  if (_currentPage == 0 && notification.metrics.pixels < -45 && !_isRefreshing) {
+                    _handlePullToShuffle();
+                  }
                 } else if (notification is ScrollEndNotification) {
                   final page = _pageController.page?.round() ?? _currentPage;
                   setState(() {
@@ -356,10 +389,13 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
                 }
                 return false;
               },
-              child: PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                physics: const PageScrollPhysics(),
+              child: RefreshIndicator(
+                color: FriendLoopColors.violet,
+                onRefresh: _handlePullToShuffle,
+                child: PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  physics: const PageScrollPhysics(),
                 onPageChanged: (page) => setState(() => _currentPage = page),
                 itemCount: reels.length,
                 itemBuilder: (context, index) {
@@ -538,8 +574,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
               },
             ),
           ),
+          ),
 
-          // Top Header with Infinity Logo and Discover / Following Tabs
+          // Top Header with Infinity Logo and Discover / Friends Reels Tabs
           Positioned(
             top: 0,
             left: 0,
@@ -559,7 +596,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Tab Pills (Discover vs Following)
+                    // Tab Pills (Discover vs Friends Reels)
                     Container(
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
@@ -570,7 +607,7 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _buildTabPill('Discover', 0),
-                          _buildTabPill('Following', 1),
+                          _buildTabPill('Friends Reels', 1),
                         ],
                       ),
                     ),
@@ -578,39 +615,9 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
                     IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
-                      tooltip: 'Reload Reels',
-                      onPressed: () {
-                        _fetchReels(shuffle: true);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Reels refreshed with new content! 🔄'),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
                       icon: const Icon(Icons.video_library_outlined, color: Colors.white, size: 22),
                       tooltip: 'Upload from Gallery',
                       onPressed: _navigateToCreateReel,
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                      icon: const Icon(Icons.notifications_none, color: Colors.white, size: 22),
-                      onPressed: () => context.push('/notifications'),
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                      icon: const Icon(Icons.search, color: Colors.white, size: 22),
-                      onPressed: () => context.push('/friends'),
                     ),
                   ],
                 ),
@@ -656,16 +663,17 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
   }
 }
 
-class _CommentsBottomSheet extends StatefulWidget {
+class _CommentsBottomSheet extends ConsumerStatefulWidget {
   final String reelId;
 
   const _CommentsBottomSheet({required this.reelId});
 
   @override
-  State<_CommentsBottomSheet> createState() => _CommentsBottomSheetState();
+  ConsumerState<_CommentsBottomSheet> createState() => _CommentsBottomSheetState();
 }
 
-class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
+class _CommentsBottomSheetState extends ConsumerState<_CommentsBottomSheet> {
+  static final Map<String, List<dynamic>> _localCommentsCache = {};
   final ApiClient _client = ApiClient();
   final TextEditingController _commentController = TextEditingController();
   List<dynamic> _comments = [];
@@ -684,16 +692,32 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
   }
 
   Future<void> _fetchComments() async {
+    final cached = _localCommentsCache[widget.reelId] ?? [];
+    if (!ApiEndpoints.isValidUuid(widget.reelId)) {
+      if (mounted) {
+        setState(() {
+          _comments = List<dynamic>.from(cached);
+          _isLoading = false;
+        });
+      }
+      return;
+    }
     try {
       final res = await _client.get('/reels/${widget.reelId}/comments');
       if (mounted) {
+        final serverComments = List<dynamic>.from(res);
         setState(() {
-          _comments = List<dynamic>.from(res);
+          _comments = [...cached, ...serverComments];
           _isLoading = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _comments = List<dynamic>.from(cached);
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -702,15 +726,38 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
     if (text.isEmpty) return;
     _commentController.clear();
 
-    try {
-      final res = await _client.post(
-        '/reels/${widget.reelId}/comments',
-        body: {'comment_text': text},
-      );
+    // Always increment the reel's comment count in state immediately
+    ref.read(reelsProvider.notifier).incrementCommentCount(widget.reelId);
+
+    Map<String, dynamic> newComment = {
+      'id': 'local-comment-${DateTime.now().millisecondsSinceEpoch}',
+      'user_name': 'You',
+      'comment_text': text,
+      'likes_count': 0,
+    };
+
+    if (ApiEndpoints.isValidUuid(widget.reelId)) {
+      try {
+        final res = await _client.post(
+          '/reels/${widget.reelId}/comments',
+          body: {'comment_text': text},
+        );
+        if (res is Map<String, dynamic>) {
+          newComment = res;
+        }
+      } catch (_) {
+        // Keep local comment fallback when offline/demo
+      }
+    }
+
+    _localCommentsCache.putIfAbsent(widget.reelId, () => []);
+    _localCommentsCache[widget.reelId]!.insert(0, newComment);
+
+    if (mounted) {
       setState(() {
-        _comments.insert(0, res);
+        _comments.insert(0, newComment);
       });
-    } catch (_) {}
+    }
   }
 
   @override

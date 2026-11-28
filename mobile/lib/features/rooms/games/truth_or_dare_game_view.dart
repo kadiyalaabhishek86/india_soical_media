@@ -5,11 +5,15 @@ import '../../../core/theme/colors.dart';
 class TruthOrDareGameView extends StatefulWidget {
   final VoidCallback? onBack;
   final Map<String, dynamic>? roomData;
+  final bool isPublicViewer;
+  final void Function(String winnerName, String summary)? onGameFinished;
 
   const TruthOrDareGameView({
     super.key,
     this.onBack,
     this.roomData,
+    this.isPublicViewer = false,
+    this.onGameFinished,
   });
 
   @override
@@ -24,6 +28,7 @@ class _TruthOrDareGameViewState extends State<TruthOrDareGameView> with SingleTi
   int _secondsLeft = 9;
   int _coins = 40;
   bool _isSpinning = false;
+  bool _hasEnded = false;
 
   late AnimationController _bottleController;
   late Animation<double> _bottleAnimation;
@@ -70,7 +75,7 @@ class _TruthOrDareGameViewState extends State<TruthOrDareGameView> with SingleTi
   }
 
   void _spinBottle() {
-    if (_isSpinning) return;
+    if (widget.isPublicViewer || _isSpinning || _hasEnded) return;
     setState(() => _isSpinning = true);
 
     final randomTarget = math.Random().nextInt(_players.length);
@@ -100,6 +105,13 @@ class _TruthOrDareGameViewState extends State<TruthOrDareGameView> with SingleTi
           backgroundColor: FriendLoopColors.brightViolet,
         ),
       );
+      if (_round >= 10 && !_hasEnded) {
+        _hasEnded = true;
+        widget.onGameFinished?.call(
+          _players[randomTarget]['name'] ?? 'Rhea',
+          'Truth or Dare Champion after 10 rounds!',
+        );
+      }
     });
   }
 
@@ -161,9 +173,11 @@ class _TruthOrDareGameViewState extends State<TruthOrDareGameView> with SingleTi
                     _buildPromptBox(targetPlayer),
                     const SizedBox(height: 12),
 
-                    // Big Spin Button
-                    _buildSpinButton(),
-                    const SizedBox(height: 12),
+                    // Big Spin Button (hidden for public viewers)
+                    if (!widget.isPublicViewer) ...[
+                      _buildSpinButton(),
+                      const SizedBox(height: 12),
+                    ],
 
                     // Circle Chat & Banter
                     _buildCircleChat(),

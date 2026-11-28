@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
+import '../../core/constants/indian_states.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/match_provider.dart';
 import '../../core/providers/friends_provider.dart';
+import '../../core/utils/nav_helper.dart';
 
 class RandomConnectScreen extends ConsumerStatefulWidget {
   const RandomConnectScreen({super.key});
@@ -17,6 +19,7 @@ class RandomConnectScreen extends ConsumerStatefulWidget {
 class _RandomConnectScreenState extends ConsumerState<RandomConnectScreen> with SingleTickerProviderStateMixin {
   bool _isSearching = false;
   String _selectedMode = 'voice'; // 'voice', 'video', 'chat'
+  String _selectedCountry = 'Any country';
   String _selectedLanguage = 'Any language';
   late AnimationController _pulseController;
   Timer? _searchTimeout;
@@ -100,7 +103,7 @@ class _RandomConnectScreenState extends ConsumerState<RandomConnectScreen> with 
             if (_isSearching) {
               _cancelSearching();
             } else {
-              context.pop();
+              safePop(context);
             }
           },
         ),
@@ -250,6 +253,48 @@ class _RandomConnectScreenState extends ConsumerState<RandomConnectScreen> with 
           ),
 
           const SizedBox(height: 8),
+
+          // Country (optional) Dropdown
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Country (optional)',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: FriendLoopColors.plum,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: FriendLoopColors.border),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedCountry,
+                    isExpanded: true,
+                    icon: const Icon(Icons.keyboard_arrow_down, color: FriendLoopColors.plum),
+                    items: ['Any country', ...IndianData.allCountries]
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c, style: const TextStyle(fontSize: 14, color: FriendLoopColors.plum)),
+                            ))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) setState(() => _selectedCountry = v);
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
 
           // Language (optional) Dropdown
           Column(

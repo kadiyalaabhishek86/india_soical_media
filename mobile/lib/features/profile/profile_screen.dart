@@ -8,6 +8,7 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/providers/favorites_provider.dart';
 import '../../core/providers/friends_provider.dart';
 import '../../core/network/api_client.dart';
+import '../../core/utils/nav_helper.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -247,6 +248,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _openEditSectionSheet(String title) {
+    final user = ref.read(authProvider).currentUserProfile;
+    final distCtrl = TextEditingController(text: _distance);
+    final heightCtrl = TextEditingController(text: _height.replaceFirst('Height: ', ''));
+    final cityCtrl = TextEditingController(text: user?.city ?? _city);
+    String tempOrientation = _orientation;
+
+    String tempPets = _pets.replaceFirst('Pets: ', '');
+    String tempDrink = _drinking.replaceFirst('Drinking: ', '');
+    String tempSmoke = _smoking.replaceFirst('Smoking: ', '');
+    String tempWorkouts = _workouts.replaceFirst('Workouts: ', '');
+    String tempSocial = _socialMedia.replaceFirst('Social media: ', '');
+
+    String tempZodiac = _zodiac.replaceFirst('Zodiac: ', '');
+    String tempEdu = _education.replaceFirst('Education: ', '');
+    String tempFamily = _familyPlan.replaceFirst('Family plan: ', '');
+    String tempComm = _commStyle.replaceFirst('Communication style: ', '');
+    String tempLove = _loveStyle.replaceFirst('Love style: ', '');
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -325,6 +344,186 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   }).toList(),
                 ),
               );
+            } else if (title == 'Essentials') {
+              const orientations = ['Straight', 'Gay', 'Lesbian', 'Bisexual', 'Asexual', 'Prefer not to say'];
+
+              content = SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Distance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: FriendLoopColors.plum)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: distCtrl,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Height', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: FriendLoopColors.plum)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: heightCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. 168 cm',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('City', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: FriendLoopColors.plum)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: cityCtrl,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Orientation', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: FriendLoopColors.plum)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      initialValue: orientations.contains(tempOrientation) ? tempOrientation : orientations.first,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      items: orientations.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+                      onChanged: (v) => setSheetState(() => tempOrientation = v ?? tempOrientation),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: FriendLoopColors.violet,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          final newHeight = heightCtrl.text.trim();
+                          final newCity = cityCtrl.text.trim();
+                          setState(() {
+                            if (distCtrl.text.trim().isNotEmpty) _distance = distCtrl.text.trim();
+                            if (newHeight.isNotEmpty) {
+                              _height = newHeight.startsWith('Height:') ? newHeight : 'Height: $newHeight';
+                            }
+                            if (newCity.isNotEmpty) _city = newCity;
+                            _orientation = tempOrientation;
+                          });
+                          if (newCity.isNotEmpty) {
+                            ref.read(authProvider.notifier).updateProfile(city: newCity).catchError((_) {});
+                          }
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Essentials updated! ✨'), backgroundColor: FriendLoopColors.success),
+                          );
+                        },
+                        child: const Text('Save Essentials', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else if (title == 'Lifestyle') {
+              const petsOpts = ['Dog lover 🐶', 'Cat lover 🐱', 'All pets 🐾', 'No pets'];
+              const drinkOpts = ['Socially 🍷', 'Never', 'Frequently', 'Sober'];
+              const smokeOpts = ['Non-smoker 🚭', 'Social smoker', 'Smoker'];
+              const workoutOpts = ['Regular workouts 💪', 'Daily gym', 'Yoga & walks 🧘', 'Sometimes'];
+              const socialOpts = ['Active on Instagram 📱', 'Occasional', 'Off social media'];
+
+              content = SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSheetDropdown('Pets', tempPets, petsOpts, (v) => setSheetState(() => tempPets = v)),
+                    _buildSheetDropdown('Drinking', tempDrink, drinkOpts, (v) => setSheetState(() => tempDrink = v)),
+                    _buildSheetDropdown('Smoking', tempSmoke, smokeOpts, (v) => setSheetState(() => tempSmoke = v)),
+                    _buildSheetDropdown('Workouts', tempWorkouts, workoutOpts, (v) => setSheetState(() => tempWorkouts = v)),
+                    _buildSheetDropdown('Social media', tempSocial, socialOpts, (v) => setSheetState(() => tempSocial = v)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: FriendLoopColors.violet,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _pets = 'Pets: $tempPets';
+                            _drinking = 'Drinking: $tempDrink';
+                            _smoking = 'Smoking: $tempSmoke';
+                            _workouts = 'Workouts: $tempWorkouts';
+                            _socialMedia = 'Social media: $tempSocial';
+                          });
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Lifestyle updated! ✨'), backgroundColor: FriendLoopColors.success),
+                          );
+                        },
+                        child: const Text('Save Lifestyle', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else if (title == 'Basics') {
+              const zodiacOpts = ['Aries ♈', 'Taurus ♉', 'Gemini ♊', 'Cancer ♋', 'Leo ♌', 'Virgo ♍', 'Libra ♎', 'Scorpio ♏', 'Sagittarius ♐', 'Capricorn ♑', 'Aquarius ♒', 'Pisces ♓'];
+              const eduOpts = ['Masters Graduate 🎓', 'Bachelors Graduate', 'Doctorate / PhD', 'In College', 'High School'];
+              const familyOpts = ['Wants children 👶', 'Open to children', 'No children', 'Not sure yet'];
+              const commOpts = ['Big texter & calls 💬', 'Calls & deep chats 📞', 'Video calls 📹', 'In-person hangouts'];
+              const loveOpts = ['Quality time & words of affirmation 💜', 'Acts of service', 'Gift giving', 'Physical touch', 'Quality time'];
+
+              content = SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSheetDropdown('Zodiac', tempZodiac, zodiacOpts, (v) => setSheetState(() => tempZodiac = v)),
+                    _buildSheetDropdown('Education', tempEdu, eduOpts, (v) => setSheetState(() => tempEdu = v)),
+                    _buildSheetDropdown('Family plan', tempFamily, familyOpts, (v) => setSheetState(() => tempFamily = v)),
+                    _buildSheetDropdown('Communication style', tempComm, commOpts, (v) => setSheetState(() => tempComm = v)),
+                    _buildSheetDropdown('Love style', tempLove, loveOpts, (v) => setSheetState(() => tempLove = v)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: FriendLoopColors.violet,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _zodiac = 'Zodiac: $tempZodiac';
+                            _education = 'Education: $tempEdu';
+                            _familyPlan = 'Family plan: $tempFamily';
+                            _commStyle = 'Communication style: $tempComm';
+                            _loveStyle = 'Love style: $tempLove';
+                          });
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Basics updated! ✨'), backgroundColor: FriendLoopColors.success),
+                          );
+                        },
+                        child: const Text('Save Basics', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
             } else {
               content = Padding(
                 padding: const EdgeInsets.all(16),
@@ -360,33 +559,72 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 left: 16,
                 right: 16,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.78),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Edit $title', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                    ],
-                  ),
-                  const Divider(),
-                  content,
-                ],
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Edit $title', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: FriendLoopColors.plum)),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                      ],
+                    ),
+                    const Divider(),
+                    Flexible(child: content),
+                  ],
+                ),
               ),
             );
           },
         );
       },
+    );
+  }
+
+  Widget _buildSheetDropdown(
+    String label,
+    String currentValue,
+    List<String> options,
+    ValueChanged<String> onChanged,
+  ) {
+    final effectiveOptions = options.contains(currentValue) ? options : [currentValue, ...options];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: FriendLoopColors.plum)),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            initialValue: currentValue,
+            isExpanded: true,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: effectiveOptions
+                .map((opt) => DropdownMenuItem(
+                      value: opt,
+                      child: Text(opt, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
+                    ))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -413,7 +651,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () => context.pop(),
+          onPressed: () => safePop(context),
         ),
         title: const Text(
           'My Profile',

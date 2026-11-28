@@ -5,7 +5,6 @@ import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
 import '../../shared/widgets/aara_button.dart';
 import '../../shared/widgets/aara_badge.dart';
-import '../../shared/widgets/demo_banner.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/match_provider.dart';
 import '../../core/providers/call_provider.dart';
@@ -85,7 +84,6 @@ class _MatchHomeScreenState extends ConsumerState<MatchHomeScreen> with SingleTi
       backgroundColor: AaraColors.background, // Warm ivory (#FFFBF7)
       body: Column(
         children: [
-          const DemoModeBanner(),
           Expanded(
             child: SafeArea(
               child: Padding(

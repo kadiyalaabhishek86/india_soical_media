@@ -6,6 +6,7 @@ import '../../core/theme/colors.dart';
 import '../../core/network/api_client.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/utils/nav_helper.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -19,7 +20,7 @@ class SettingsScreen extends ConsumerWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: FriendLoopColors.plum),
-          onPressed: () => context.pop(),
+          onPressed: () => safePop(context, fallbackRoute: '/profile'),
         ),
         title: const Text(
           'Settings',

@@ -6,11 +6,15 @@ import '../../../core/theme/colors.dart';
 class VoiceMimicPartyView extends StatefulWidget {
   final VoidCallback? onBack;
   final Map<String, dynamic>? roomData;
+  final bool isPublicViewer;
+  final void Function(String winnerName, String summary)? onGameFinished;
 
   const VoiceMimicPartyView({
     super.key,
     this.onBack,
     this.roomData,
+    this.isPublicViewer = false,
+    this.onGameFinished,
   });
 
   @override
@@ -26,6 +30,8 @@ class _VoiceMimicPartyViewState extends State<VoiceMimicPartyView> with TickerPr
   String _tomSpeech = "\"Meow! 'Hey handsome, you missed that carrom queen!'\"";
   String _tomMood = '🎧 DJ Tom Ready!';
   int _coins = 40;
+  int _mimicCount = 0;
+  bool _hasEnded = false;
 
   late AnimationController _waveController;
   late AnimationController _bounceController;
@@ -81,6 +87,7 @@ class _VoiceMimicPartyViewState extends State<VoiceMimicPartyView> with TickerPr
   }
 
   void _triggerMimicSpeech() {
+    if (widget.isPublicViewer || _hasEnded) return;
     setState(() => _isRecording = true);
     Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
@@ -89,6 +96,7 @@ class _VoiceMimicPartyViewState extends State<VoiceMimicPartyView> with TickerPr
         _isRecording = false;
         _tomSpeech = nextPhrase;
         _tomMood = '😸 Mimicking with Helium Pitch!';
+        _mimicCount += 1;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -96,6 +104,10 @@ class _VoiceMimicPartyViewState extends State<VoiceMimicPartyView> with TickerPr
           backgroundColor: FriendLoopColors.success,
         ),
       );
+      if (_mimicCount >= 5 && !_hasEnded) {
+        _hasEnded = true;
+        widget.onGameFinished?.call('You', 'Funniest Voice Mimic Star of Party #104!');
+      }
     });
   }
 
@@ -160,9 +172,11 @@ class _VoiceMimicPartyViewState extends State<VoiceMimicPartyView> with TickerPr
                     _buildBroadcastToggle(),
                     const SizedBox(height: 12),
 
-                    // Hold to Speak Waveform & Button
-                    _buildVoiceWaveAndRecordButton(),
-                    const SizedBox(height: 14),
+                    // Hold to Speak Waveform & Button (hidden for public viewers)
+                    if (!widget.isPublicViewer) ...[
+                      _buildVoiceWaveAndRecordButton(),
+                      const SizedBox(height: 14),
+                    ],
 
                     // Room Banter & Reactions
                     _buildBanterComments(),

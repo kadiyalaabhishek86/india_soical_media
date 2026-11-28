@@ -66,6 +66,52 @@ class IndianData {
 
   static const List<String> allLanguages = languages;
 
+  static const List<String> allCountries = [
+    'India',
+    'United States',
+    'United Kingdom',
+    'Canada',
+    'Australia',
+    'United Arab Emirates',
+    'Singapore',
+    'Germany',
+    'France',
+    'Japan',
+    'South Korea',
+    'Brazil',
+    'Italy',
+    'Spain',
+    'Netherlands',
+    'New Zealand',
+    'Thailand',
+    'Indonesia',
+    'Malaysia',
+    'Philippines',
+  ];
+
+  static const List<String> worldLanguages = [
+    'English',
+    'Hindi',
+    'Spanish',
+    'French',
+    'Arabic',
+    'Mandarin',
+    'Telugu',
+    'Tamil',
+    'Kannada',
+    'Malayalam',
+    'Marathi',
+    'Bengali',
+    'Gujarati',
+    'Punjabi',
+    'Urdu',
+    'Japanese',
+    'Korean',
+    'German',
+    'Portuguese',
+    'Italian',
+  ];
+
   static const List<String> allCities = [
     'Bengaluru',
     'Mumbai',

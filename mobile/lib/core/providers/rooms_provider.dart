@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/api_client.dart';
+import '../constants/api_endpoints.dart';
 
 class RoomItem {
   final String id;
@@ -15,6 +16,8 @@ class RoomItem {
   final int maxSeats;
   final int activeCount;
   final String status;
+  final List<String> invitedFriendIds;
+  final DateTime? expiresAt;
 
   RoomItem({
     required this.id,
@@ -30,6 +33,8 @@ class RoomItem {
     required this.maxSeats,
     required this.activeCount,
     this.status = 'active',
+    this.invitedFriendIds = const [],
+    this.expiresAt,
   });
 
   factory RoomItem.fromJson(Map<String, dynamic> json) {
@@ -48,6 +53,8 @@ class RoomItem {
       maxSeats: (json['max_seats'] is num) ? (json['max_seats'] as num).toInt() : 12,
       activeCount: (json['active_count'] is num) ? (json['active_count'] as num).toInt() : 1,
       status: json['status']?.toString() ?? 'active',
+      invitedFriendIds: (json['invited_friend_ids'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      expiresAt: json['expires_at'] != null ? DateTime.tryParse(json['expires_at'].toString()) : null,
     );
   }
 
@@ -66,6 +73,8 @@ class RoomItem {
       'max_seats': maxSeats,
       'active_count': activeCount,
       'status': status,
+      'invited_friend_ids': invitedFriendIds,
+      if (expiresAt != null) 'expires_at': expiresAt!.toIso8601String(),
     };
   }
 }
@@ -100,6 +109,7 @@ class RoomsState {
 
 class RoomsNotifier extends StateNotifier<RoomsState> {
   final ApiClient _client = ApiClient();
+  final Set<String> _dismantledRoomIds = {};
 
   static final List<RoomItem> defaultSeedRooms = [
     RoomItem(
@@ -192,6 +202,30 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     fetchRooms();
   }
 
+  bool _isRoomActiveAndValid(RoomItem r) {
+    if (_dismantledRoomIds.contains(r.id)) return false;
+    if (r.status == 'cancelled' || r.status == 'closed' || r.status == 'expired') return false;
+    if (r.expiresAt != null && DateTime.now().isAfter(r.expiresAt!)) {
+      _dismantledRoomIds.add(r.id);
+      return false;
+    }
+    return true;
+  }
+
+  void dismantleExpiredRooms() {
+    final now = DateTime.now();
+    bool changed = false;
+    for (final r in state.rooms) {
+      if (r.expiresAt != null && now.isAfter(r.expiresAt!)) {
+        _dismantledRoomIds.add(r.id);
+        changed = true;
+      }
+    }
+    if (changed) {
+      state = state.copyWith(rooms: state.rooms.where(_isRoomActiveAndValid).toList());
+    }
+  }
+
   Future<void> fetchRooms({String? filter}) async {
     final activeFilter = filter ?? state.currentFilter;
     state = state.copyWith(isLoading: true, currentFilter: activeFilter);
@@ -199,26 +233,37 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     try {
       final res = await _client.get('/rooms?type=$activeFilter');
       if (res is List) {
-        final List<RoomItem> serverRooms = res.map((r) => RoomItem.fromJson(Map<String, dynamic>.from(r))).toList();
+        final List<RoomItem> serverRooms = res
+            .map((r) => RoomItem.fromJson(Map<String, dynamic>.from(r)))
+            .where(_isRoomActiveAndValid)
+            .toList();
 
         // Preserve locally created rooms that may not be synced to server yet
         final serverIds = serverRooms.map((r) => r.id).toSet();
-        final localCreated = state.rooms.where((r) => !serverIds.contains(r.id) && !defaultSeedRooms.any((d) => d.id == r.id)).toList();
+        final localCreated = state.rooms
+            .where((r) => !serverIds.contains(r.id) && !defaultSeedRooms.any((d) => d.id == r.id))
+            .where(_isRoomActiveAndValid)
+            .toList();
 
         // Merge: local created rooms first, then server rooms, then default seeds if few
         final merged = [...localCreated, ...serverRooms];
         if (merged.isEmpty) {
-          merged.addAll(defaultSeedRooms.where((d) => activeFilter == 'all' || d.roomType == activeFilter));
+          merged.addAll(
+            defaultSeedRooms
+                .where((d) => (activeFilter == 'all' || d.roomType == activeFilter) && _isRoomActiveAndValid(d)),
+          );
         }
 
         state = state.copyWith(rooms: merged, isLoading: false);
         return;
       }
     } catch (e) {
-      // Keep existing rooms with fallback seeds so UI is never empty
-      final fallback = state.rooms.isNotEmpty
-          ? state.rooms
-          : defaultSeedRooms.where((d) => activeFilter == 'all' || d.roomType == activeFilter).toList();
+      // Keep existing active rooms with fallback seeds so UI stays accurate
+      final fallback = (state.rooms.isNotEmpty
+              ? state.rooms
+              : defaultSeedRooms.where((d) => activeFilter == 'all' || d.roomType == activeFilter))
+          .where(_isRoomActiveAndValid)
+          .toList();
       state = state.copyWith(rooms: fallback, isLoading: false, error: e.toString());
     }
   }
@@ -231,9 +276,12 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     required String accessType,
     required int entryFeeCoins,
     required int maxSeats,
+    int activeCount = 1,
+    List<String> invitedFriendIds = const [],
   }) async {
-    // Generate optimistic room item immediately
+    // Generate optimistic room item immediately with 15-minute expiration
     final newId = 'local-room-${DateTime.now().millisecondsSinceEpoch}';
+    final expiresAt = DateTime.now().add(const Duration(minutes: 15));
     final localRoom = RoomItem(
       id: newId,
       title: title,
@@ -246,7 +294,9 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
       accessType: accessType,
       entryFeeCoins: entryFeeCoins,
       maxSeats: maxSeats,
-      activeCount: 1,
+      activeCount: activeCount,
+      invitedFriendIds: invitedFriendIds,
+      expiresAt: expiresAt,
     );
 
     // Immediately insert at index 0 so rooms menu shows it right away!
@@ -267,7 +317,12 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
         },
       );
       if (res is Map<String, dynamic>) {
-        final serverRoom = RoomItem.fromJson(res);
+        final serverRoom = RoomItem.fromJson({
+          ...res,
+          'active_count': activeCount > 1 ? activeCount : (res['active_count'] ?? 1),
+          'invited_friend_ids': invitedFriendIds,
+          'expires_at': expiresAt.toIso8601String(),
+        });
         // Replace temporary localRoom with server response room
         final updatedList = state.rooms.map((r) => r.id == newId ? serverRoom : r).toList();
         state = state.copyWith(rooms: updatedList);
@@ -278,6 +333,44 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     }
 
     return localRoom;
+  }
+
+  void extendRoomDuration(String roomId, {Duration extra = const Duration(minutes: 15)}) {
+    state = state.copyWith(
+      rooms: state.rooms.map((r) {
+        if (r.id == roomId) {
+          return RoomItem(
+            id: r.id,
+            title: r.title,
+            hostId: r.hostId,
+            hostName: r.hostName,
+            hostAvatar: r.hostAvatar,
+            roomType: r.roomType,
+            activityType: r.activityType,
+            language: r.language,
+            accessType: r.accessType,
+            entryFeeCoins: r.entryFeeCoins,
+            maxSeats: r.maxSeats,
+            activeCount: r.activeCount,
+            status: r.status,
+            invitedFriendIds: r.invitedFriendIds,
+            expiresAt: DateTime.now().add(extra),
+          );
+        }
+        return r;
+      }).toList(),
+    );
+  }
+
+  void closeRoom(String roomId) {
+    _dismantledRoomIds.add(roomId);
+    state = state.copyWith(
+      rooms: state.rooms.where((r) => r.id != roomId).toList(),
+    );
+    if (ApiEndpoints.isValidUuid(roomId)) {
+      _client.post('/rooms/$roomId/close').catchError((_) => null);
+      _client.post('/rooms/$roomId/leave').catchError((_) => null);
+    }
   }
 }
 
